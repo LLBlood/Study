@@ -2210,6 +2210,19 @@ EXPLAIN SELECT * FROM your_table WHERE column_name = 'value';
   - 索引下推
     - 索引下推（Index Condition Pushdown，简称ICP）是MySQL 5.6版本的新特性，用于优化数据查询。具体来说，当存储引擎通过索引检索到数据后，MySQL服务器会判断数据是否符合条件。如果不使用索引条件下推优化，存储引擎需要将数据返回给MySQL服务器，服务器再判断数据是否符合条件。而如果使用索引条件下推优化，MySQL服务器会将一部分判断条件传递给存储引擎，存储引擎会根据这些条件判断索引是否符合MySQL服务器传递的条件，只有当索引符合条件时才会将数据检索出来返回给MySQL服务器。这样，索引下推能减少存储引擎查询基础表的次数和MySQL服务器从存储引擎接收数据的次数，从而提高查询效率。
 
+### 4.1.4 MySQL创建索引原则
+
+- 最左前缀匹配原则
+- 频繁作为查询条件的字段采取创建索引
+- 频繁更新的字段不适合创建索引
+- 索引列不能参与计算，不能有函数操作
+- 优先考虑扩展索引，而不是新建索引，避免不必要的索引
+- 在order by 或者 group by 子句中，创建索引需要注意顺序
+- 区分度低的数据列不适合做索引列（如 性别）
+- 定义有外键的数据列一定要建立索引
+- 对于定义为text、image数据类型的列不要建立索引
+- 删除不再使用或者很少使用的索引
+
 ## 4.2 MySQL存储过程
 
 ### 4.2.1 查询，创建，执行，删除存储过程
@@ -2729,6 +2742,971 @@ EXPLAIN SELECT * FROM your_table WHERE column_name = 'value';
     - 然后 session A 要再插入 (8,8,8) 这一行，被 session B 的间隙锁锁住。由于出现了死锁， InnoDB 让session B 回滚
 
   - [具体可见幻读解决方案网页](https://www.php.cn/faq/554990.html)
+
+
+## 4.7 MySQL特性
+
+### 4.7.1 乐观锁、悲观锁
+
+- 悲观锁思想就是，当前线程要进来修改数据时，别的线程都得拒之门外
+
+  ```mysql
+  select * from User where name=‘jay’ for update
+  ```
+
+  - 没用索引/主键的话，select for update 加的就是表锁
+  - 查询条件用了索引/主键，会加行锁
+
+- 乐观锁思想就是，有线程过来，先放过去修改，如果看到别的线程没修改过， 就可以修改成功，如 果别的线程修改过，就修改失败或者重试
+
+- 乐观锁一般会使用版本号机制或 CAS 算法实现
+
+### 4.7.2 MySQL事务特性
+
+- ACID
+- 原子性（Atomicity）
+  - 需要保证多个DML操作是原子的，要么都成功，要么都失败
+  - 失败需要对原本执行成功的数据进行回滚，UNDO_LOG表，事务执行过程中，把修改前得数据快照保存到UNDO_LOG里面，一旦出现错误，就直接从UNDO_LOG里面读取数据执行反向操作
+- 一致性（Consistency）
+  - 表示数据的完整性约束没有被破坏，这个更多是依赖于业务层面的保证，数据 库本身也提供了一些，比如主键的唯一余数，字段长度和类型的保证等等
+- 隔离性（Isolation）
+  - 是多个并行事务对同一个数据进行操作的时候，如何避免多个事务的干扰导致数据混乱的问题
+- 持久性（Durability）
+  - 只要事务提交成功，那对于这个数据的结果的影响一定是永久性 的，不能因为宕机或者其他原因导致数据变更失效
+  - Redo_LOG文件，这个文件存储了数据被修改之后的值，当我们通过事务对数据 进行变更操作的时候，除了修改内存缓冲区里面的数据以外，还会把本次修改的值追加到 REDO_LOG里面，当提交事务的时候，直接把REDO_LOG日志刷到磁盘上持久化，一旦数据库出现宕机，在Mysql重 启在以后可以直接用REDO_LOG里面保存的重写日志读取出来，再执行一遍从而保证持久性。
+
+### 4.7.3 in和exists区别
+
+- in
+
+  ```mysql
+  select * from A where deptId in (select deptId from B)
+  ```
+
+  - 先查询部门表 B select deptId from B 再由部门deptId，查询 A 的员工 select * from A where A.deptId = B.deptId
+
+- exists
+
+  ```mysql
+  select * from A where exists (select 1 from B where A.deptId = B.deptId)
+  ```
+
+  - 因为exists 查询的理解就是，先执行主查询，获得数据后，再放到子查询中做 条件验证，根据验证结果（true 或者false），来决定主查询的数据结果是否得以保留
+  - select * from A,先从A 表做循环，select * from B where A.deptId = B.deptId,再从 B 表做循环
+
+- 如果 B 的数据量小于 A，适合使 用 in，如果 B 的数据量大于 A，即适合选择 exists，这就是 in 和 exists 的 区别。
+
+### 4.7.4 MySQL锁
+
+- 根据锁粒度划分
+
+  - 表锁：开销小，加锁快；锁定粒度大，发生锁冲突概率高，并发度最低；不会出现死锁。
+
+    ```mysql
+    隐式上锁（默认，自动加锁自动释放）
+    select //上读锁
+    insert、update、delete //上写锁
+    
+    显式上锁（手动）
+    lock table tableName read;//读锁
+    lock table tableName write;//写锁
+    
+    解锁（手动）
+    unlock tables;//所有锁表
+    
+    lock table test_index read;// 上读锁
+    select * from test_index; // session01可以正常读取  
+    select * from test_index;// session02可以正常读取
+    
+    update test_index set index_num = 3 where index_uuid = "000004";//session01报错，因被上读锁不能写操作  
+    update test_index set index_num = 3 where index_uuid = "000004";// session02被阻塞
+    
+    unlock tables;// 解锁
+    update test_index set index_num = 3 where index_uuid = "000004";// 更新操作成功
+    
+    lock table test_index write;// 上写锁
+    select * from test_index; // session01可以正常读取  
+    select * from test_index;// session02被阻塞
+    update test_index set index_num = 4 where index_uuid = "000004";// session01可以正常更新操作  
+    update test_index set index_num = 5 where index_uuid = "000004";// session02被阻塞
+    unlock tables;// 解锁
+    
+    select * from test_index;//读取成功
+    update test_index set index_num = 5 where index_uuid = "000004";// 更新操作成功
+    ```
+
+  - 行锁：开销大，加锁慢；会出现死锁；锁定力度小，发生锁冲突的概率低，并发度高。
+
+    ```mysql
+    隐式上锁（默认，自动加锁自动释放）
+    
+    select //不会上锁
+    insert、update、delete //上写锁
+    
+    显式上锁（手动）
+    
+    select * from tableName lock in share mode;//读锁
+    select * from tableName for update;//写锁
+    
+    begin;
+    select * from test_index where index_uuid = "000004" lock in share mode;// session01上读锁
+    select * from test_index where index_uuid = "000004";// session02可以正常读取
+    update test_index set index_num = 6 where index_uuid = "000004";// session01可以更新操作  
+    update test_index set index_num = 7 where index_uuid = "000004";// session02被阻塞
+    commit;
+    
+    update test_index set index_num = 7 where index_uuid = "000004";// 更新操作成功
+    
+    begin;
+    select * from test_index where index_uuid = "000004" for update;// session01上写锁
+    select * from test_index where index_uuid = "000004";// session02可以正常读取
+    update test_index set index_num = 9 where index_uuid = "000004";// session01可以更新操作
+    update test_index set index_num = 10 where index_uuid = "000004";// session02被阻塞
+    rollback;
+    
+    update test_index set index_num = 10 where index_uuid = "000004";// 更新操作成功
+    ```
+
+  - 页锁：开销和加锁速度介于表锁和行锁之间；会出现死锁，锁定粒度介于表锁和行锁之间，并发度一般
+
+  - 为什么行锁上了写锁，别的事务还可以读操作？
+
+    - 因为InnoD‍B有MVCC机制（多版本并发控制），可以使用快照读，而不会被阻塞。
+
+- 根据锁模式划分
+
+  - 记录锁
+    - 针对表中的一条记录进行加锁的机制。这种锁类型仅仅锁住一条记录，不会对周围的数据产生影响。记录锁有两种类型：S型记录锁和X型记录锁。S型记录锁用于只读操作，而X型记录锁用于读/写操作
+  - gap锁
+    - 间隙锁。间隙锁的作用是防止在这个间隙中插入新的记录，从而保证数据的一致性，用于防止幻读
+  - next-key锁
+    - 是Record锁和Gap锁的组合
+  - 意向锁
+    - 用于表示某个事务正在锁定一行或将要锁定一行。在MySQL的InnoDB存储引擎中，意向锁分为意向共享锁（IS）和意向排他锁（IX），分别表示事务意图在表中的单个行上设置共享锁或独占锁。
+  - 插入意向锁
+    - 插入意向锁是一种间隙锁形式的意向锁，在真正执行 INSERT 操作之前设置。当执行插入操作时，总会检查当前插入操作的下一条记录（已存在的主索引节点）上是否存在锁对象，判断是否锁住了 gap。如果锁住了，则判定和插入意向锁冲突，当前插入操作就需要等待，也就是配合上面的间隙锁或者临键锁一起防止了幻读操作。因为插入意向锁是一种意向锁，意向锁只是表示一种意向，所以插入意向锁之间不会互相冲突，多个插入操作同时插入同一个 gap 时，无需互相等待。
+
+- 根据加锁机制划分
+
+  - 乐观锁
+  - 悲观锁
+
+- 根据兼容性划分
+
+  - 共享锁
+    - 如果一个事务T对数据对象A加上共享锁后，其他事务只能对A再加共享锁，而不能加排他锁，获准共享锁的事务只能读数据，不能修改数据
+  - 排他锁
+    - 如果一个事务T对数据对象A加上排他锁后，其他事务不能对A再加任何锁，直到T释放A上的排他锁。获准排他锁的事务既能读数据，又能修改数据
+
+### 4.7.5 SQL执行顺序
+
+![image-20231124101656093](images\sqlExeSeq.png)
+
+# 五、Redis
+
+## 5.1 Redis结构
+
+### 5.1.1 Redis简述
+
+- Redis是一个基于内存实现的Key-Value数据结构的Nosql数据库
+
+- 基本数据类型
+
+  - String（字符串）
+
+    - 二进制安全的，可以存储图片或者序列化的对象，值最大存储为512M
+    - 应用场景：共享session、分布式锁、计数器、限流
+
+  - Hash（哈希）
+
+    - 在 Redis 中，哈希类型是指 v（值）本身又是一个键值对（k-v）结构
+    - 应用场景：缓存用户信息
+
+  - List（列表）
+
+    - 列表（list）类型是用来存储多个有序字符串，一个列表最多可以存储 2^32-1 个元素
+
+    - 应用场景：消息队列，文章列表
+
+      ```
+      lpush+lpop=Stack（栈）
+      lpush+rpop=Queue（队列）
+      lpush+ltrim=Capped Collection（有限集合）
+      lpush+brpop=Message Queue（消息队列）
+      ```
+
+  - Set（集合）
+
+    - 集合（set）类型也是用来保存多个字符串元素，但是不允许重复元素
+    - 应用场景：用户标签，生成随机数抽奖，社交需求
+
+  - Zset（有序集合）
+
+    - 已排序的字符串集合，同时元素不能重复
+    - 应用场景：排行榜，社交需求（如用户点赞）
+
+- 特殊数据类型
+
+  - Geo
+    - 地理位置定位，用于存储地理位置信息，并对存储的信息进行操作
+  - HyperLogLog
+    - 用来做基数统计算法（用来统计一组数字中出现频率最高的数字）的数据结构，统计网站的UV（即不同的电脑或网络用户通过互联网访问网站的次数）
+  - Bitmaps
+    - 用一个比特位来映射某个元素的状态，在Redis 中，它的底层是基于字符串类型实现的 ，可以把 bitmaps 成作一个以比特位为单位的数组
+
+### 5.1.2 Redis速度
+
+- 基于内存实现
+
+- 虚拟内存机制
+
+- 高效的数据结构
+
+  - SDS简单动态字符串
+  - 哈希
+  - 跳跃表
+  - 压缩列表ziplist
+
+- 合理的数据编码
+
+- 合理的线程模型
+
+  - 单线程模型：避免上下文切换
+
+  - I/O多路复用
+
+    - IO多路复用机制，核心思想是让单个线程去监视多个连接，一旦某个连接就绪，也就是触发了读/写 事件，就通知应用程序，去获取这个就绪的连接进行读写操作，也就是在应用程序里面可以使用单个线程同时处理多个客户端连接，在对系统资源消耗较少的情况下 提升服务端的链接处理数量
+
+    - 客户端请求到服务端后，此时客户端在传输数据过程中，为了避 免Server端在read客户端数据过程中阻塞，服务端会把该请求注册到Selector复路器上，服务端此时 不需要等待，只需要启动一个线程，通过selector.select()阻塞轮询复路器上就绪的channel即可， 也就是说，如果某个客户端连接数据传输完成，那么select()方法会返回就绪的channel，然后执行 相关的处理
+
+      ![image-20231124104437800](images\selector.png)
+
+    - 常见的IO多路复用机制的实现方式有： select 、poll、epoll
+
+    - 其中select和poll是基于轮询的方式去获取就绪连接
+
+    - epoll是基于事件驱动的方式获取就绪连接
+
+- IO多路复用详解
+
+  - select
+
+    - 采用轮询和遍历的方式。也就是说，在客户端操作服务器时，会 创建三种文件描述符，简称FD。分别是writefds（写描述符）、readfds（读描述符）和 exceptfds （异常描述符）。
+    - 而select会阻塞监视这三种文件描述符，等有数据、可读、可写、出异常或超时都会返回
+    - 返回后通过遍历fdset，也就是文件描述符的集合，来找到就绪的FD，然后，触发相应的IO操作
+    - 优点是跨平台支持性好，几乎在所有的平台上支持
+    - 由于select是采用轮询的方式进行全盘扫描，因此，随着FD数量增多而导 致性能下降
+    - 每次调用select()方法，都需要把FD集合从用户态拷贝到内核态，并进行遍历。而操作系统对单个进程打开的FD数量是有限制的，一般默认是1024个，在IO吞吐量巨大的情况下，效率提升仍然有限。
+
+  - poll
+
+    - poll 模型的原理与select模型基本一致，也是采用轮询加遍历，唯一的区别就是 poll 采用链表 的方式来存储FD
+    - 优点是没有最大FD的数量限制
+    - 缺点和select一样，也是采用轮询方式全盘扫描，同样也会随着FD数量增多而导致性能下降
+
+  - epoll
+
+    - epoll模型是采用事件通知机制来触发相关的IO操作。它没有FD个数限制，而且从用户态拷贝 到内核态只需要一次。它主要通过系统底层的函数来注册、激活FD，从而触发相关的 IO 操作
+    - epoll_create()
+      - 在系统启动时，会在Linux内核里面申请一个B+树结构的文件系统， 然后，返回epoll对象，也是一个FD
+    - epoll_ctl()
+      - 每新建一个连接的时候，会同步更新epoll对象中的FD，并且绑定一个 callback回调函数
+    - epoll_wait()
+      - 轮询所有的callback集合，并触发对应的 IO操作
+    - epoll模型最大的优点是将轮询改成了回调，大大提高了CPU执行效率，也不会随FD数量 的增加而导致效率下降。当然，它也没有FD数量限制，也就是说，它能支持的FD上限是操作系统的最大文件句柄数。一般而言，1G 内存大概支持 10 万个句柄。分布式系统中常用的组件如Redis、 Nginx都是优先采用epoll模型
+    - 缺点，只能在Linux下工作
+
+    ![image-20231124110249439](images\IOMultiplexing.png)
+
+### 5.1.3 Redis常见问题
+
+- 缓存穿透
+  - 查询一个一定不存在的数据，由于缓存是不命中时需要从数据库查询，查不到数据则不写入缓存，这将导致这个不存在的数据每次请求都要到 数据库去查询，进而给数据库带来压力
+  - 原因
+    - 业务不合理的设计，比如大多数用户都没开守护，但是你的每个请求都去缓存，查询某个 userid 查询有没有守护
+    - 业务/运维/开发失误的操作，比如缓存和数据库的数据都被误删除了
+    - 黑客非法请求攻击，比如黑客故意捏造大量非法请求，以读取不存在的业务数据
+  - 方案
+    - 如果是非法请求，我们在 API 入口，对参数进行校验，过滤非法
+    - 如果查询数据库为空，我们可以给缓存设置个空值，或者默认值。但是如有有写请求进来话，需要更新缓存，以保证缓存一致性，同时，最后给缓存设置适当过期时间。（业务上比较常用，简单有效）
+    - 使用布隆过滤器快速判断数据是否存在。即一个查询请求过来时，先通过布隆过滤器判断值是否存在，存在才继续往下查。它由初始值为 0的位图数组和 N 个哈希函数组成。一个对一 个 key 进行N 个 hash 算法获取 N 个值，在比特数组中将这 N 个值散列后设定 为 1，然后查的时候如果特定的这几个位置都为 1，那么布隆过滤器判断该 key 存在，Redis和单机版BloomFilter都有布隆过滤器
+- 缓存雪崩
+  - 指缓存中数据大批量到过期时间，而查询数据量巨大，请求都直接 访问数据库，引起数据库压力过大甚至 down 机
+  - 原因+方案
+    - 缓存雪奔一般是由于大量数据同时过期造成的，对于这个原因，可通过均匀设置过 期时间解决，即让过期时间相对离散一点。如采用一个较大固定值+一个较小的随机值，5 小时+0 到 1800 秒酱紫
+    - Redis 故障宕机也可能引起缓存雪奔。这就需要构造 Redis 高可用集群
+- 缓存击穿
+  - 指热点key 在某个时间点过期时候，而恰好在这个时间点对这个 Key 有大量的并发请求过来，从而大量的请求打到 db。
+  - 缓存击穿看着有点像缓存雪崩，其实它两区别是，缓存雪奔是指数据库压力过大甚至 down 机，缓存击穿只是大量并发请求到了 DB 数据库层面。可以认为击穿是 缓存雪奔的一个子集吧
+  - 使用互斥锁方案。缓存失效时，而是先使用某些带成 功返回的原子操作命令，如(Redis ✁ setnx）去操作，成功的时候，再去加载 db数据库数据和设置缓存。否则就去重试获取缓存
+  - ”永不过期”，是指没有设置过期时间，但是热点数据快要过期时，异步线程去更新和设置过期时间。
+- 热key
+  - 把访问频率高的 key，称为热点key
+  - 如果某一热点 key 的请求到服务器主机时，由于请求量特别大，可能会导致主机资源不足，甚至宕机，从而影响正常的服务
+  - 原因
+    - 用户消费的数据远大于生产的数据，如秒杀、热点新闻等读多写少的场景
+    - 请求分片集中，超过单 Redis 服务器的性能，比如固定名称 key，Hash 落入同 一台服务器，瞬间访问量极大，超过机器瓶颈，产生热点 Key 问题。
+  - 识别热key
+    - 凭经验判断哪些是热 Key；
+    - 客户端统计上报；
+    - 服务代理层上报
+  - 方案
+    - Redis 集群扩容：增加分片副本，均衡读流量
+    - 将热 key 分散到不同的服务器
+    - 使用二级缓存，即 JVM 本地缓存,减少 Redis 的读请求。
+
+### 5.1.4 Redis过期策略
+
+- 常用过期策略
+  - 定时过期
+    - 每个设置过期时间的 key 都需要创一个定时器，到过期时间就会立即对 key 进行清除。该策略可以立即清除过期的数据，对内存很友好；但是会占用大量的CPU 资源去处理过期的数据，从而影响缓存的响应时间和吞吐量。
+  - 惰性过期
+    - 只有当访问一个 key 时，才会判断该 key 是否已过期，过期则清除。该策略可 以最大化地节省 CPU 资源，却对内存非常不友好。极端情况可能出现大量过期 key 没有再次被访问，从而不会被清除，占用大量内存。
+  - 定期过期
+    - 每隔一定时间，会扫描一定数量数据库expires 字典中一定数量key，并清除其中已过期key。该策略是前两者一个折中方案。通过调整定时扫描时间间隔和每次扫描限定耗时，可以在不同情况下使得 CPU 和内存 资源达到最优平衡效果
+    - expires 字典会保存所有设置了过期时间key过期时间数据，其中，key 是指向键空间中某个键指针，value 是该键毫秒精度UNIX 时间戳表 示过期时间。键空间是指该 Redis 集群中保存所有键
+- Redis 中同时使用了惰性过期和定期过期两种过期策略
+
+### 5.1.5 Redis内存淘汰策略
+
+- LRU
+  - 最近最少使用淘汰算法，其关键在于看页面最后一次被使用到发生替换的时间长短，时间越长，页面就会被置换，实际操作中，每当缓存命中（即缓存数据被访问），则将数据移到链表头部；当链表满的时候，将链表尾部的数据丢弃
+- LFU
+  - 最不经常使用淘汰算法，其关键在于看一定时间段内页面被使用的频率（次数），使用频率越低，页面就会被置换，在实际操作中，新数据插入到链表头部；每当缓存命中（即缓存数据被访问），则将数据移到链表头部；当链表满的时候，将链表尾部的数据丢弃。
+- LRU和LFU的主要区别在于判断淘汰页面的依据不同。LRU看的是最后一次使用时间，而LFU看的是一段时间内的使用频率。
+- 内存淘汰策略
+  - volatile-lru
+    - 当内存不足以容纳新写入数据时，从设置了过期时间key 中 使用 LRU（最近最少使用）算法进行淘汰
+  - allkeys-lru
+    - 当内存不足以容纳新写入数据时，从所有 key 中使用 LRU（最近 最少使用）算法进行淘汰
+  - volatile-lfu
+    - 4.0 版本新增，当内存不足以容纳新写入数据时，在过期 key 中，使用 LFU 算法进行删除 key
+  - allkeys-lfu
+    - 4.0 版本新增，当内存不足以容纳新写入数据时，从所有 key 中 使用 LFU 算法进行淘汰
+  - volatile-random
+    - 当内存不足以容纳新写入数据时，从设置了过期时间 key 中，随机淘汰数据
+  - allkeys-random
+    - 当内存不足以容纳新写入数据时，从所有 key 中随机淘汰 数据
+  - volatile-ttl
+    - 当内存不足以容纳新写入数据时，在设置了过期时间 key 中， 根据过期时间进行淘汰，越早过期优先被淘汰
+  - noeviction
+    - 默认策略，当内存不足以容纳新写入数据时，新写入操作会报错。
+
+### 5.1.6 Redis持久化
+
+- RDB
+
+  ![image-20231124132347481](images\RDB.png)
+
+  - 通过快照的方式来实现持久化的，也就是说会根据快照的触发条件，把内存里面的数据快照写入到磁盘， 以二进制的压缩文件进行存储
+  - RDB快照的触发方式有很多，比如执行bgsave命令触发异步快照，执行save命令触发同步快照，同步快照会阻塞客户端的执行指令
+  - RDB是每隔一段时间触发持久化，因此数据安全性低
+
+- AOF
+
+  ![image-20231124132521484](images\AOF.png)
+
+  - 根据redis.conf文件里面的配置，自动触发bgsave主从复制的时候触发AOF持久化，它是一种近乎 实时的方式，把Redis Server执行的事务命令进行追加存储
+
+  - 客户端执行一个数据变更的操作，Redis Server就会把这个命令追加到aof缓冲区的 末尾，然后再把缓冲区的数据写入到磁盘的AOF文件里面，至于最终什么时候真正持久化到磁盘， 是根据刷盘的策略来决定
+
+  - 为AOF这种指令追加的方式，会造成AOF文件过大，带来明显的IO性能问题，所以Redis针 对这种情况提供了AOF重写机制，也就是说当AOF文件的大小达到某个阈值的时候，就会把这个文 件里面相同的指令进行压缩
+
+    ```redis
+    set name mic
+    set name mic1
+    set name mic2
+    set name mic3
+    AOF重写
+    set name mic3
+    ```
+
+  - AOF可以做到实时持久化，数据安全性较高 RDB文件默认采用压缩的方式持久化，AOF存储的是执行指令，所以RDB在数据恢复的时候性能比 AOF要好
+
+## 5.2 Redis高可用
+
+### 5.2.1 主从模式
+
+- Redis 主从概念
+
+  - Redis 主从模式，就是部署多台 Redis 服务器，有主库和从库，它们之间通过主 从复制，以保证数据副本一致。
+  - 主从库之间采用是读写分离方式，其中主库负责读操作和写操作，从库则负责读操作
+  - 如果 Redis 主库挂了，切换其中从库成为主库
+
+- Redis 主从同步过程
+
+  ![image-20231124134110767](images\redisMasterSlave.png)
+
+  - 一阶段：主从库间建立连接、协商同步
+    - 从库向主库发送 psync 命令，告诉它要进行数据同步
+    - 主库收到 psync 命令后,响应 FULLRESYNC 命令（它表示第一次复制采用是全量复制），并带上主库 runID 和主库目前复制进度 offset。
+  - 二阶段：主库把数据同步到从库，从库收到数据后，完成本地加载
+    - 主库执行 bgsave 命令，生成 RDB 文件，接着将文件发给从库。从库接收到 RDB 文件后，会先清空当前数据库，然后加载 RDB 文件
+    - 主库把数据同步到从库过程中，新来写操作，会记录到 replication buffer。
+  - 三阶段，主库把新写命令，发送到从库
+    - 主库完成 RDB 发送后，会把 replication buffer 中修改操作发给从库，从 库再重新执行这些操作。这样主从库就实现同步啦。
+
+- Redis 主从的一些注意点
+
+  - 主从数据不一致
+
+    - 因为主从复制是异步进行，如果从库滞后执行，则会导致主从数据不一致
+    - 主从库网路延迟
+    -  从库收到了主从命令，但是它正在执行阻塞性命令（如 hgetall等）
+
+  - 解决主从数据不一致
+
+    - 可以换更好硬件配置，保证网络畅通
+    - 监控主从库间复制进度
+    - 读取过期数据
+
+  - 一主多从，全量复制时主库压力问题
+
+    - 主库 fork 进程生成 RDB，这个 fork 过 程是会阻塞主线程处理正常请求。同时，传输大RDB 文件也会占用主库 网络宽带
+
+    - 可以使用主-从-从模式解决。什么是主从从模式呢？其实就是部署主从集群时， 选择硬件网络配置比较好一个从库，让它跟部分从库再立主从关系
+
+      ![image-20231124135451705](images\redisMasterSlave2.png)
+
+  - 主从网络断了
+
+    - 当主从库断开连接后，主库会把断连期间收到写操作命令，写入 replication buffer，同时也会把这些操作命令写入repl_backlog_buffer 这个缓冲区。repl_backlog_buffer 是一个环形缓冲区，主库会记录自己写到位置，从库则会记录自己已经读到位置，主从库重连后，就是利用 repl_backlog_buffer 实现增量复制。
+
+- Redis主从同步方式
+
+  - 全量同步
+    - 全量同步，一般发生在第一次建立主从关系、或者跟主断开时间比较久的场景
+  - 增量同步
+    - 数据同步，slave是定时会发起的，假如每次同步，都把主的所有数据都进行同步，那么性 能会很慢，大部分时候，slave可能只跟master相差一部分数据。那么只需要同步这部分 数据
+    - slave发起同步的时候，还会带有上次同步的偏移量，然后跟master的最新的偏移量比较， 如果相差的数据在master的积压缓存（一个专门存储master最新数据并且会覆盖的内存区 间）能查询到的话，那么只需要把相差的数据同步给slave。这就叫做增量同步
+
+- [Redis主从搭建过程](https://zhuanlan.zhihu.com/p/647155496)
+
+  - master配置文件
+
+    ```bash
+    # master
+    #端口号
+    port 6379
+    
+    #设置客户端连接后进行任何其他指定前需要使用的密码
+    requirepass 123456
+    
+    #daemonize no 将daemonize yes注释起来或者 daemonize no设置，因为该配置和docker run中-d参数冲突，会导致容器一直启动失败
+    daemonize no
+    
+    # 任何主机都可以连接到redis
+    bind 0.0.0.0
+    
+    #是否开启保护模式，默认开启。要是配置里没有指定bind和密码。开启该参数后，redis只会本地进行访问，拒绝外部访问。
+    protected-mode no
+    
+    # 默认情况下，redis会在后台异步的把数据库镜像备份到磁盘，但是该备份是非常耗时的，而且备份也不能很频繁，如果发生诸如拉闸限电、拔插头等状况，那么将造成比较大范围的数据丢失。
+    # 所以redis提供了另外一种更加高效的数据库备份及灾难恢复方式。
+    # 开启append only模式之后，redis会把所接收到的每一次写操作请求都追加到appendonly.aof文件中，当redis重新启动时，会从该文件恢复出之前的状态。
+    # 但是这样会造成appendonly.aof文件过大，所以redis还支持了BGREWRITEAOF指令，对appendonly.aof 进行重新整理。
+    # 你可以同时开启asynchronous dumps 和 AOF
+    appendonly yes
+    ```
+
+  - slave配置文件
+
+    ```bash
+    # 连接ip为172.17.0.4的master节点的redis
+    SLAVEOF 172.17.0.4 6379
+    
+    # slave1
+    port 6380
+    
+    #设置客户端连接后进行任何其他指定前需要使用的密码
+    requirepass 123456
+    
+    # 这一步很重要！主从认证密码，否则主从不能同步！！
+    masterauth 123456
+    
+    #daemonize no 将daemonize yes注释起来或者 daemonize no设置，因为该配置和docker run中-d参数冲突，会导致容器一直启动失败
+    daemonize no
+    
+    # 任何主机都可以连接到redis
+    bind 0.0.0.0
+    
+    #是否开启保护模式，默认开启。要是配置里没有指定bind和密码。开启该参数后，redis只会本地进行访问，拒绝外部访问。
+    protected-mode no
+    
+    # 开启AOF
+    appendonly yes
+    ```
+    
+  - docker 启动
+  
+    ```bash
+    docker run -p 6379:6379 \
+     -v $PWD/data6379:/data  \
+     -v $PWD/redis6379.conf:/etc/redis/redis.conf  \
+     --privileged=true \
+     --name redis-6379 \
+     -d hub.c.163.com/library/redis redis-server /etc/redis/redis.conf
+    ```
+  
+  - docker 查看容器
+  
+    ```bash
+    docker exec -it redis-6379 redis-cli -p 6379
+    # 查看节点ip
+    docker inspect c5dd40f83b74
+    ```
+
+### 5.2.2 Redis哨兵
+
+主从模式中，一旦主节点由于故障不能提供服务，需要人工将从节点晋升为主 节点，同时还要通知应用方更新主节点地址
+
+- 哨兵模式
+
+  - 就是由一个或多个哨兵实例组成哨兵系统，它可以监视所有Redis 主节点和从节点，并在被监视主节点进入下线状态时，自动将下线主服务器属下某个从节点升级为新主节点。一般使用多个哨兵来进行 监控 Redis 节点，并且各个哨兵之间还会进行监控
+
+    ![image-20231124155549909](images\sentinel.png)
+
+- 主观下线和客观下线
+
+  - 主观下线
+    - 哨兵进程向主库、从库发送 PING 命令，如果主库或者从库没有在规定时间内响 应 PING 命令，哨兵就把它标记为主观下线。
+
+  - 客观下线
+    - 如果是主库被标记为主观下线，则正在监视这个主库所有哨兵要以每秒一次频 率，以确认主库是否真进入了主观下线。 当有多数哨兵（一般少数服从多数， 由 Redis 管理员自行设定一个值）在指定时间范围内确认主库确进入了主 观下线状态，则主库会被标记为客观下线，就可以做主从切换
+
+- 哨兵选主
+
+  - 过滤和打分。其实就是在多个从库中，先按照一定筛选条件，把不符合条件从库过滤掉。然后再按照一定规则，给剩下从库逐个打分，将得分最高从库选为新主库
+
+- 哨兵执行主从切换
+
+  - 标记主库客观下线这个哨兵，紧接着向其他哨兵发送命令，再发起投票，希望它可以来执行主从切换。这个投票过程称为 Leader 选举
+
+- [Redis哨兵搭建过程](https://zhuanlan.zhihu.com/p/647382777)
+
+- [Redis哨兵搭建过程2](https://blog.51cto.com/u_16099189/7570232)
+
+  - sentinel.conf配置文件
+
+    ```bash
+    # 修改哨兵的监听端口
+    port 26379
+    
+    # 让sentinel服务后台运行(docker的话需要设置为no，非docker运行设置为yes, 因为docker有个-d属性就是让在后台运行的)
+    daemonize no
+    
+    # 当Redis哨兵以守护进程的方式运行的时候,默认会把pid文件放在/var/tmp/sentinel1.log,也可以配置到其他地址，多个哨兵需要重命名文件。
+    pidfile /var/run/redis-sentinel.pid
+    
+    # 修改日志文件的路径
+    logfile "/var/tmp/sentinel.log"
+    
+    # 哨兵sentinel监控的redis主节点的
+    ## ip：主机ip地址[docker就是docker内部ip]
+    ## port：redis端口号
+    ## master-name：可以自己命名的主节点名字（只能由字母A-z、数字0-9 、这三个字符".-_"组成。）
+    ## quorum：当这些quorum个数sentinel哨兵认为master主节点失联,那么这时客观上认为主节点失联了,就进行failover(故障转移)
+    # sentinel monitor <master-name> <ip> <redis-port> <quorum>
+    sentinel monitor mymaster 192.168.51.121 6379 2
+    
+    # 当在Redis实例中开启了requirepass <foobared>，所有连接Redis实例的客户端都要提供密码。
+    sentinel auth-pass mymaster 123456
+    
+    #超过5秒master还没有连接上，则认为master已经停止
+    sentinel down-after-milliseconds mymaster 5000
+    
+    # 注释掉以下参数，当前redis版本6.2.1，开启参数启动哨兵启报错
+    # >>> 'SENTINEL master-reboot-down-after-period mymaster 0'
+    # Unrecognized sentinel configuration statement
+    # SENTINEL master-reboot-down-after-period mymaster 0
+    ```
+
+  - docker启动
+
+    ```bash
+    docker run -p 26379:26379 \
+    --name sentinel1 \
+    -v /etc/redis-sentinel:/usr/local/etc/redis \
+    -v /var/tmp/sentinel1.log:/var/tmp/sentinel.log \
+    -d hub.c.163.com/library/redis redis-sentinel /usr/local/etc/redis/sentinel1.conf
+    ```
+
+
+### 5.2.3 Redis Cluster 集群
+
+哨兵模式基于主从模式，实现读写分离，它还可以自动切换，系统可用性更高。 但是它每个节点存储数据是一样，浪费内存，并且不好在线扩容。Redis 切片集群将数据分散来存储
+
+![image-20231127163445426](images\RedisCluster.png)
+
+- 哈希槽（Hash Slot）
+
+  - Redis Cluster 方案采用哈希槽（Hash Slot），来处理数据和实例之间映射关系
+  - 一个切片集群被分为 16384个 slot（槽），每个进入 Redis 键值对，根据 key 进行散列，分配到这 16384 插槽中一个。使用哈希映射也比较简单， 用CRC16算法计算出一个 16bit值，再对 16384取模。数据库中每个键都属 于这 16384 个槽其中一个，集群中每个节点都可以处理这 16384 个槽。 集群中每个节点负责一部分哈希槽，假设当前集群有 A、B、C3 个节点， 每个节点上负责哈希槽数 =16384/3，那么可能存在一种分配
+    - 节点A 负责 0~5460 号哈希槽
+    - 节点B 负责 5461~10922 号哈希槽
+    - 节点C 负责 10923~16383 号哈希槽
+
+- MOVED 重定向和ASK重定向
+
+  - 在 Redis cluster 模式下，节点对请求处理过程如下
+
+    1. 通过哈希槽映射，检查当前 Redis key 是否存在当前节点
+    2. 若哈希槽不由自身节点负责，就返回 MOVED 重定向
+    3. 若哈希槽确实由自身负责，且 key 在 slot 中，则返回该 key 对应结果
+    4. 若 Redis key 不存在此哈希槽中，检查该哈希槽否正在迁出（MIGRATING）？
+    5. 若 Redis key 正在迁出，返回ASK 错误重定向客户端到迁移目的服务器上
+    6. 若哈希槽未迁出，检查哈希槽是否导入中？
+    7. 若哈希槽导入中且有 ASKING 标记，则直接操作，否则返回 MOVED 重定向
+
+  - MOVED重定向
+
+    - Redis Custer中，客户端可以向集群中任意节点发送请求。此时当前节点先对Key进行CRC 16计算，然后按16384取模确定Slot槽。确定该Slot槽所对应的节点，如果该Slot是当前节点负责，且该Key存在于该Slot中，则直接返回该Key对应的结果；如果该Slot不是当前节点负责，则返回MOVED重定向告知客户端对应的节点地址信息
+
+      ![image-20231127165700128](images\redisMoved.png)
+
+  - ASK 重定向
+
+    - Ask重定向发生于Redis集群进行伸缩（扩容/缩容）时，由于此时会进行Slot槽迁移。当我们去源节点访问时，数据可能已经迁移到目标节点中。故此时需要借助Ask重定向来解决该问题。具体地，在将A节点中的某个槽迁移到B节点过程中：
+
+      当A节点该Slot槽设置为 MIGRATING迁出状态 后，A节点依然可以接受有关此Slot槽的查询命令。如果该Key依然存在于该Slot槽中，则直接返回结果；如果该Key不存在于该Slot槽，说明该Key可能已经迁移到目的节点B当中了，故其会返回ASK重定向以告知客户端该Slot槽迁入的目的节点B地址信息
+      当B节点该Slot槽设置为 IMPORTING迁入状态 时，B节点可以接受有关此哈希槽的查询命令。但前提是客户端向B节点发送该Key的查询命令之前，必须要先发送ASKING命令。否则，B节点会返回MOVED重定向以告知客户端A节点的地址信息
+
+    ![image-20231127170034987](images\redisAsk.png)
+
+- Cluster 集群节点通讯协议：Gossip
+
+  - Gossip 协议基本思想：一个节点想要分享一些信息给网络中其他一些节点。 于是，它周期性随机选择一些节点，并把信息传递给这些节点。这些收到信 息节点接下来会做同样事情，即把这些信息传递给其他一些随机选择节 点。一般而言，信息会周期性传递给 N个目标节点，而不只是一个，这个N被称为fanout
+
+  - Redis Cluster 集群通过 Gossip 协议进行通信，节点之前不断交换信息，交换 信息内容包括节点出现故障、新节点加入、主从节点变更信息、slot 信息等等。gossip 协议包含多种消息类型，包括 ping，pong，meet，fail
+
+    ![image-20231127170417542](images\gossip.png)
+
+    - meet 消息：通知新节点加入。消息发送者通知接收者加入到当前集群，meet 消息通信正常完成后，接收节点会加入到集群中并进行周期性ping、pong 消息交换
+    - ping 消息：节点每秒会向集群中其他节点发送 ping 消息，消息中带有自己已知两个节点地址、槽、状态信息、最后一次通信时间等
+    - pong 消息：当接收到 ping、meet 消息时，作为响应消息回复给发送方确认消息 正常通信。消息中同样带有自己已知两个节点信息
+    - fail 消息：当节点判定集群内另一个节点下线时，会向集群内广播一个 fail 消息， 其他节点接收到 fail 消息之后把对应节点更新为下线状态
+
+- 故障转移
+
+  - redis 集群通过 ping/pong 消息，实现故障发现。这个环境包括主观下线和客 观下线
+
+  - 主观下线
+
+    - 某个节点认为另一个节点不可用，即下线状态，这个状态并不是最终故障判定，只能代表一个节点意见，可能存在误判情况
+
+      ![image-20231127170739589](images\redisSubjectiveOffline.png)
+
+      
+
+  - 客观下线
+
+    - 指标记一个节点真正下线，集群内多个节点都认为该节点不可用， 从而达成共识结果。如果持有槽主节点故障，需要为该节点进行故障转移
+
+      ![image-20231127171159486](images\redisObjectivelyOffline.png)
+
+- 故障恢复
+
+  - 故障发现后，如果下线节点主节点，则需要在它从节点中选一个替换它，以保证集群高可用。流程如下
+    1. 资格检查：检查从节点是否具备替换故障主节点条件
+    2. 准备选举时间：资格检查通过后，更新触发故障选举时间
+    3. 发起选举：到了故障选举时间，进行选举
+    4.  选举投票：只有持有槽主节点才有票，从节点收集到足够选票（大于一半）， 触发替换主节点操作
+
+- [Redis Cluster集群搭建过程](https://zhuanlan.zhihu.com/p/655514905)
+
+  - Docker Compose
+
+    ```bash
+    yum install -y docker-compose
+    ```
+
+  - Docker Compose 3主3从的Redis Cluster集群
+
+    ```yml
+    # 构建一个3主3从的Redis集群
+    # Compose 版本
+    version: '3.8'
+    
+    # 定义服务
+    services:
+    
+      Redis-Service-1:
+        image: hub.c.163.com/library/redis
+        container_name: node-1
+        command: [ "redis-server", "/etc/redis/redis.conf" ]
+        ports:
+          - "6371:6379"
+        volumes:
+          - /etc/redis-cluster/redis.conf:/etc/redis/redis.conf
+        networks:
+          # 使用名为redis_cluster_3m3s_net的网络并设置容器IP
+          redis_cluster_3m3s_net:
+            ipv4_address: 120.120.120.11
+    
+      Redis-Service-2:
+        image: hub.c.163.com/library/redis
+        container_name: node-2
+        command: [ "redis-server", "/etc/redis/redis.conf" ]
+        ports:
+          - "6372:6379"
+        volumes:
+          - /etc/redis-cluster/redis.conf:/etc/redis/redis.conf
+        networks:
+          # 使用名为redis_cluster_3m3s_net的网络并设置容器IP
+          redis_cluster_3m3s_net:
+            ipv4_address: 120.120.120.12
+    
+      Redis-Service-3:
+        image: hub.c.163.com/library/redis
+        container_name: node-3
+        command: [ "redis-server", "/etc/redis/redis.conf" ]
+        ports:
+          - "6373:6379"
+        volumes:
+          - /etc/redis-cluster/redis.conf:/etc/redis/redis.conf
+        networks:
+          # 使用名为redis_cluster_3m3s_net的网络并设置容器IP
+          redis_cluster_3m3s_net:
+            ipv4_address: 120.120.120.13
+    
+      Redis-Service-4:
+        image: hub.c.163.com/library/redis
+        container_name: node-4
+        command: [ "redis-server", "/etc/redis/redis.conf" ]
+        ports:
+          - "6374:6379"
+        volumes:
+          - /etc/redis-cluster/redis.conf:/etc/redis/redis.conf
+        networks:
+          # 使用名为redis_cluster_3m3s_net的网络并设置容器IP
+          redis_cluster_3m3s_net:
+            ipv4_address: 120.120.120.14
+    
+      Redis-Service-5:
+        image: hub.c.163.com/library/redis
+        container_name: node-5
+        command: [ "redis-server", "/etc/redis/redis.conf" ]
+        ports:
+          - "6375:6379"
+        volumes:
+          - /etc/redis-cluster/redis.conf:/etc/redis/redis.conf
+        networks:
+          # 使用名为redis_cluster_3m3s_net的网络并设置容器IP
+          redis_cluster_3m3s_net:
+            ipv4_address: 120.120.120.15
+    
+      Redis-Service-6:
+        image: hub.c.163.com/library/redis
+        container_name: node-6
+        command: [ "redis-server", "/etc/redis/redis.conf" ]
+        ports:
+          - "6376:6379"
+        volumes:
+          - /etc/redis-cluster/redis.conf:/etc/redis/redis.conf
+        networks:
+          # 使用名为redis_cluster_3m3s_net的网络并设置容器IP
+          redis_cluster_3m3s_net:
+            ipv4_address: 120.120.120.16
+    
+    # 定义网络
+    networks:
+      # 定义一个名为redis_cluster_3m3s_net的网络
+      redis_cluster_3m3s_net:
+        ipam:
+          config:
+            # 设置网段
+            - subnet: 120.120.120.0/24
+    ```
+
+  - redis.conf
+
+    ```bash
+    ..
+    
+    # 注释bind配置项
+    # bind 127.0.0.1 -::1
+    
+    # 设为 no, 关闭保护模式
+    protected-mode no
+    
+    # 端口设为6379
+    port 6379
+    
+    # 设为no, 因为docker启动时会通过-d参数来让其实现后台运行
+    daemonize no
+    
+    # 修改数据库数量, 用于验证配置文件是否生效
+    databases 5
+    
+    # 设置访问主库时的密码
+    masterauth "52996"
+    
+    # 设置Redis密码
+    requirepass 52996
+    
+    # 使能集群模式
+    cluster-enabled yes
+    
+    # 集群是否要求槽全覆盖
+    # yes：当负责某个槽的主库下线且没有相应的从库进行故障恢复时，集群整体不可用。即其他槽的节点在线也无法访问
+    # no：当负责某个槽的主库下线且没有相应的从库进行故障恢复时，集群仍然可用。即可访问其他槽的数据
+    cluster-require-full-coverage yes
+    
+    ...
+    ```
+
+  - redis配置cluster
+
+    ```bash
+    docker exec -it node-1 \
+        redis-cli -p 6379 -a 52996 --cluster create \
+        120.120.120.11:6379 120.120.120.12:6379 \
+        120.120.120.13:6379 120.120.120.14:6379 \
+        120.120.120.15:6379 120.120.120.16:6379 \
+        --cluster-replicas 1
+    ```
+
+    Redis Cluster集群中的从节点，官方默认设置的是不分担读请求的、只作备份和故障转移用,当有请求读向从节点时，会被重定向对应的主节点来处理
+
+## 5.3 Redis分布式锁
+
+### 5.3.1 redis命令分布式锁
+
+- 不推荐写法
+
+  - 命令setnx + expire分开写
+
+    - setnx： Redis实现分布式锁的核心便在于SETNX命令，它是SET if Not eXists的缩写，如果键不存在，则将键设置为给定值，在这种情况下，它等于SET；当键已存在时，不执行任何操作；成功时返回1，失败返回0
+
+    - 代码写法
+
+      ```java
+      if（jedis.setnx(key,lock_value) == 1）{ //加锁
+      	expire（key，100）; //设置过期时间
+      	try {
+      		do something / / 业务请求
+      	} catch(){
+          } finally {
+      		jedis.del(key); //释放锁
+      	}
+      }
+      ```
+
+    - 如果执行完 setnx加锁，正要执行 expire 设置过期时间时，进程 crash 掉或者 要重启维护了，那这个锁就“长生不老”了，别的线程永远获取不到锁，所以 分布式锁不能这么实现
+
+  - setnx + (value 值 -> 过期时间)
+
+    - 代码实现
+
+      ```java
+      long expires = System.currentTimeMillis() + expireTime; //系统时间+设置过期时间String
+      String expiresStr = String.valueOf(expires);
+      // 如果当前锁不存在，返回加锁成功
+      if (jedis.setnx(key, expiresStr) == 1) {
+      	return true;
+      }
+      // 如果锁已经存在，获取锁过期时间
+      String currentValueStr = jedis.get(key);
+      // 如果获取到过期时间，小于系统当前时间，表示已经过期
+      if (currentValueStr != null && Long.parseLong(currentValueStr) < System.currentTimeMillis()) {
+      	// 锁已过期，获取上一个锁过期时间，并设置现在锁过期时间
+      	String oldValueStr = jedis.getSet(key, expiresStr);
+      	if (oldValueStr != null && oldValueStr.equals(currentValueStr)) {
+      		// 考虑多线程并发情况，只有一个线程设置值和当前值相同，它才可以加锁
+      		return true;
+      	}
+      }
+      //其他情况，均返回加锁失败
+      return false;
+      ```
+
+    - 过期时间客户端自己生成，分布式环境下，每个客户端时间必须同步
+
+    - 没有保存持有者唯一标识，可能被别客户端释放/解锁
+
+    - 锁过期时候，并发多个客户端同时请求过来，都执行了 jedis.getSet()，最终只能 有一个客户端加锁成功，但该客户端锁过期时间，可能被别客户端覆盖
+
+  - set 扩展命令（set ex px nx）
+
+    - SET key value [EX seconds] [PX milliseconds] [NX|XX]
+
+    - 生存时间（TTL，以秒为单位）
+
+    - EX second ：设置键的过期时间为 second 秒，SET key value EX second 效果等同于 SETEX key second value 
+
+    - PX millisecond ：设置键的过期时间为millisecond毫秒，SET key value PX millisecond 效果等同于 PSETEX key millisecond value 。
+
+    - NX ：只在键不存在时，才对键进行设置操作，SET key value NX 效果等同于 SETNX key value 。
+
+    - XX ：只在键已经存在时，才对键进行设置操作。
+
+    - 代码实现
+
+      ```java
+      if（jedis.set(key, lock_value, "NX", "EX", 100s) == 1）{ //加锁
+          try {
+              do something // 业务处理
+          } catch() {
+              
+          } finally {
+              jedis.del(key); // 释放锁
+          }
+      }
+      ```
+
+    - 锁过期释放了，业务还没执行完【可以使用看门狗操作，在业务处理中延长执行时间】
+
+    - 锁被别的线程误删
+
+- 推荐写法
+
+  - set ex px nx + 校验唯一随机值，再删除
+
+    - 代码实现
+
+      ```java
+      if（jedis.set(key, uni_request_id, "NX", "EX", 100s) == 1）{ //加锁
+      	try {
+      		do something / / 业务处理
+      	} catch(){
+      	} finally {
+      		//判断是不是当前线程加锁,才释放
+      		if (uni_request_id.equals(jedis.get(key))) {
+      			jedis.del(key); //释放锁
+      		}
+      	}
+      }
+      ```
+
+    - 但是释放锁代码非原子性，可以优化成lua脚本执行
+
+### 5.3.2 Redisson
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
