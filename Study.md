@@ -149,13 +149,233 @@
 
 ## 3.1 java基础
 
-1. Java中重写equals方法为什么要重写hashcode方法？
+### 3.1.1 基础知识点
+
+- Java中重写equals方法为什么要重写hashcode方法？
 
    ```
    等价的两个对象散列值⼀定相同，但是散列值相同的两个对象不⼀定等价，这是因为计算哈希值具有随机性，两个值不同的对象可能计算出相同的哈希值。
    HashMap存储值时，先调用hashCode，唯一则存储，不唯一则再调用equals，结果相同则不再存储，结果不同则散列到其他位置。因为hashCode效率更高（仅为一个int值），比较起来更快。
    所以重写equals可能导致对象等价，hashCode不同
    ```
+
+- Comparator和Comparable的区别
+
+   - ![image-20231205134454170](images\compare.png)
+   - 如果实现类没有实现Comparable接口，又想对两个类进行比较（或者实现类实现了Comparable接口，但是对compareTo方法内的比较算法不满意），那么可以实现Comparator接口，自定义一个比较器，写比较算法
+   - 实现Comparable接口的方式比实现Comparator接口的耦合性要强一些，如果要修改比较算法，则需要修改Comparable接口的实现类，而实现Comparator的类是在外部进行比较的，不需要对实现类有任何修改。从这个角度说，实现Comparable接口的方式其实有些不太好，尤其在我们将实现类的.class文件打成一个.jar文件提供给开发者使用的时候。实际上实现Comparator 接口的方式后面会写到就是一种典型的策略模式。
+
+- 多态
+
+   - 多态机制包括静态多态（编译时多态）和动态多态（运行时多态）
+   - 静态多态比如说重载，动态多态一般指在运行时才能确定调用哪个方法
+   - 多态实现方式：子类继承父类（extends）和类实现接口（implements）
+   - 多态核心之处就在于对父类方法改写或对接口方法实现，以取得在运行时不同执行效果
+
+- 反射
+
+   - 用 Class.forName 静态方法。
+   - 用类.class 方法
+   - 用实例对象.getClass() 方法
+
+- 类实例化顺序为： 父类静态代码块/静态域->子类静态代码块/静态域 - > 父类非静态代码块 -> 父类构造器 -> 子类非静态代码块 -> 子类
+
+- 创建对象
+
+   - 用 new 语句创建对象
+   - 使用反射，使用 Class.newInstance()创建对象/调用类对象构造方法—— Constructor
+   - 调用对象clone()方法
+   - 运用反序列化手段，调用 java.io.ObjectInputStream 对象的 readObject()方法
+   - 使用 Unsafe
+
+- try-catch-finally-return 执行描述
+
+   - 如果不发生异常，不会执行 catch
+
+   - 不管有没有发生异常，finally 都会执行
+
+   - 即使try 和 catch 中有 return 时，finally 仍然会执行
+
+   - finally 在 return 后面表达式运算完后再执行。（此时并没有返回运算后值，而先要返回值保存起来，若 finally 中无return，则不管 finally 中代 码怎么样，返回值都不会改变，仍然之前保存值），该情况下函数返回值在 finally 执行前确定
+
+      ```java
+      public class TryTest {
+          public static int getResult() {
+              int result = 1;
+              try {
+                  System.out.println("run in try");
+                  result++;
+                  return result;
+              } catch (Exception e) {
+                  System.out.println("run in catch");
+                  result++;
+                  return result;
+              } finally {
+                  System.out.println("run in finally");
+                  result++;
+              }
+          }
+      
+          public static void main(String[] args) {
+              int result = getResult();
+              System.out.println("result : " + result);
+          }
+      }
+      // run in try
+      // run in finally
+      // result : 2
+      ```
+
+   - finally 部分就不要 return 了，要不然，就回不去 try 或者catch  return 了
+
+
+
+### 3.1.2 JDK Proxy和CGLib
+
+- JDK Proxy是实现目标对象的接口，而GGLib是继承目标对象
+
+- JDK Proxy和CGLib都是在运行期生成字节码
+
+- JJDK Proxy是通过反射调用目标对象的方法，而CGLib是采用FastClass机制来调用
+
+- CGLib无法代理final修饰的方法
+
+- JDK Proxy实现过程
+
+  - 核心代码
+
+    ```java
+    public class ProxyFactory {
+        private Object target;
+    
+        public ProxyFactory(Object target) {
+            this.target = target;
+        }
+    
+        public Object getProxy() {
+            ClassLoader classLoader = this.getClass().getClassLoader();
+            Class<?>[] interfaces = target.getClass().getInterfaces();
+            InvocationHandler invocationHandler = new InvocationHandler() {
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) {
+                    Object result = null;
+                    try {
+                        System.out.println("[动态代理][日志] "+method.getName()+"，参数："+ Arrays.toString(args));
+                        result = method.invoke(target, args);
+                        System.out.println("[动态代理][日志] "+method.getName()+"，结 果："+ result);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        System.out.println("[动态代理][日志] "+method.getName()+"，异常："+e.getMessage());
+                    } finally {
+                        System.out.println("[动态代理][日志] "+method.getName()+"，方法执行完毕");
+                    }
+                    return result;
+                }
+            };
+            /**
+             * newProxyInstance()：创建一个代理实例
+             * 其中有三个参数：
+             * 1、classLoader：指定加载动态生成的代理类的类加载器（注：所有引入的第三方类库以及自己编写的java类 都是由 应用类加载器 负责加载的）
+             【根类加载器（Bootstrap）> 扩展类加载器（Extension）> 系统类加载器（System）
+             系统类加载器又称为应用类加载器】
+             * 2、interfaces：获取目标对象实现的所有接口的class对象所组成的数组
+             * 3、invocationHandler：设置代理对象实现目标对象的接口的方法的过程，即代理类中如何重写接口中的抽象方法
+             */
+            return Proxy.newProxyInstance(classLoader, interfaces, invocationHandler);
+        }
+    }
+    ```
+
+  - JDK Proxy原理
+
+    ```
+    Vm options
+    -Dsun.misc.ProxyGenerator.saveGeneratedFiles=true
+    
+    生成对应的.class代理文件
+    package com.sun.proxy;
+    public final class $Proxy4 extends Proxy implements CalculatorI
+    ```
+
+    - 代理类继承了Proxy类，其主要目的是为了传递InvocationHandler
+    - 代理类实现了被代理的接口CalculatorI，这也是为什么代理类可以直接强转成接口的原因。
+    - 有一个公开的构造函数，参数为指定的InvocationHandler，并将参数传递到父类Proxy中。
+    - 每一个实现的方法，都会调用InvocationHandler中的invoke方法，并将代理类本身、Method实例、入参三个参数进行传递。这也是为什么调用代理类中的方法时，总会分派到InvocationHandler中的invoke方法的原因
+
+- CGLib 实现过程
+
+  - 核心代码
+
+    ```java
+    public class SampleClass {
+        public void test() {
+            System.out.println("121212");
+        }
+    
+        public static void main(String[] args) {
+            Enhancer enhancer = new Enhancer();
+            enhancer.setSuperclass(SampleClass.class);
+            enhancer.setCallback(new MethodInterceptor() {
+                @Override
+                public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+                    System.out.println("before run");
+                    Object o1 = methodProxy.invokeSuper(o, objects);
+                    System.out.println("after run");
+                    return o1;
+                }
+            });
+            SampleClass sampleClass = (SampleClass) enhancer.create();
+            sampleClass.test();
+        }
+    }
+    ```
+
+  - CGLib 原理
+
+    ```
+    System.setProperty(DebuggingClassWriter.DEBUG_LOCATION_PROPERTY, System.getProperty("user.dir"));
+    debug启动可查看对应class文件
+    ```
+
+    - Enhancer创建一个被代理对象的子类并且拦截所有的方法调用，Enhancer不能够拦截final方法，例如Object.getClass()方法，这是由于Java final方法语义决定的。基于同样的道理，Enhancer也不能对fianl类进行代理操作。这也是Hibernate为什么不能持久化final class的原因
+    - 生成的动态代理类继承了父类 SampleClass，并且实现了接口 Factory
+    - 动态代理类持有 MethodInterceptor
+    - 动态代理类会重写父类 SampleClass的非 final、private 方法；也会构建自己的方法（cglib 方法），构建方式：CGLIB”+“$父类方法名$
+    - cglib 方法的方法体：super.方法名，直接调用父类；重写方法：它会调用拦截器中的 intercept() 方法
+    - methodProxy.invokeSuper() 方法会调用动态代理类中的 cglib 方法；methodProxy.invoke() 方法会调用动态代理类中的重写方法
+
+
+### 3.1.3 深拷贝和浅拷贝
+
+- 无论是深拷贝还是浅拷贝，都需要通过实现Cloneable接口，并实现clone()方法，以在clone()方法里面实现浅拷贝或者深拷贝的逻辑
+- 浅拷贝，就是只复制某个对象的指针，而不复制对象本身，这种复制方式意味着两个引用指针指向被复制对象的同一块内存地址
+- 深拷贝，会完全创建一个一模一样的新对象，新对象和老对象不共享内存，也就意味着对新对象的修改不会影响老对象的值
+
+### 3.1.4 限制问题
+
+- 静态成员属于类， 随着 类加载而加载到静态方法区内存，当类加载时，此时不一定有实例， 没有实例，就不可以访问非静态成员。类加载先于实例创静态环境中，不可以访问非静态变量
+- 构造器不能被继承，因为每个类类名都不相同，而构造器名称与类名相 同， 所以谈不上继承。 又由于构造器不能被继承，所以相应就不能被重写了
+- Java 不支持多继承，Java 提供了接口和内部类以达到实现多继承功能，弥补单继承缺陷
+- final 修饰类叫最终类，该类不能被继承。final 修饰方法不能被重写。final 修饰变量叫常量，常量必须初始化，初始化之后值就不能被修改。
+- round() ：返回四舍五入，负 .5 小数返回较大整数，如 -1.5 返回 -1
+- ceil() ：返回小数所在两整数间较大值，如 -1.5 返回 -1
+- floor() ：返回小数所在两整数间较小值，如 -1.5 返回 -2.0。
+
+### 3.1.5 序列化和反序列化
+
+- 序列化，就是把内存里面的对象转化为字节流，以便用来实现存储或者传输，序列化的前提是保证通信双方对于对象的可识别性，所以很多时候，我们会把对象先转化为 通用的解析格式，比如json、xml等。然后再把他们转化为数据流进行网络传输，从而实现跨平台和 跨语言的可识别性
+- 反序列化，就是根据从文件或者网络上获取到的对象的字节流，根据字节流里面保存的对象描述信息和状态
+
+### 3.1.6 面向对象原则
+
+- 单一职责原则:一个类只做它该做事情
+- 开闭原则：软件实体应当对扩展开放，对修改关闭
+- 依赖倒转原则：面向接口编程
+- 接口隔离原则：接口要小而专，绝不能大而全
+- 合成聚合复用原则：优先使用聚合或合成关系复用代码
+- 迪米特法则：迪米特法则又叫最少知识原则，一个对象应当对其他对象有尽可能少了解
+
+
 
 ## 3.2 Java容器（jdk1.8）
 
@@ -4037,6 +4257,8 @@ EXPLAIN SELECT * FROM your_table WHERE column_name = 'value';
   - 数据链路层：在物理层提供比特流服务基础上，建立相邻结点之间数据链路
   - 物理层：建立、维护、断开物理连接。
 
+  ![image-20231204101929914](images\netinfo.png)
+
 ### 7.1.5 HTTP协议无状态
 
 - 当浏览器第一次发送请求给服务器时，服务器响应了；如果同个浏览器发第二次请求给服务器时，它还会响应，但是呢，服务器不知道你就是刚才那个浏览器。简言之，服务器不会去记住你是谁，所以是无状态协议。
@@ -4083,7 +4305,424 @@ HTTPS= HTTP+SSL/TLS，可以理解 Https身披SSL(Secure SocketLayer，安全套
     7. 服务器将加密后密文返回到客户端
     8. 客户端收到后，用自己密钥对其进行对称解密，得到服务器返回数据
 
-  - 
+
+## 7.2 计算机名词解析
+
+### 7.2.1 数字签名/数字证书
+
+- 数字证书是指在互联网通讯中标志通讯各方身份信息，一个数字认证，人们可 以在网上用它来识别对方身份。为了避免身份被篡改冒充。
+- 数字签名是公钥和个人等信息经过 Hash 摘要算法加密，形成信息摘要；将信息摘要拿到拥 有公信力得认证中心（CA），用它得私钥对信息摘要加密，形成数字签名。
+
+![image-20231204100927672](images\CA.png)
+
+
+
+
+
+### 7.2.2 对称加密/非对称加密
+
+- 对称加密：指加密和解密使用同一密钥，优点运算速度较快，缺点如何安 全将密钥传输给另一方。常见对称加密算法有：DES、AES 等
+- 非对称加密：指加密和解密使用不同密钥（即公钥和私钥）。公钥与私钥成对存在，如果用公钥对数据进行加密，只有对应私钥才能解密。常见非对称加密算法有 RSA
+
+### 7.2.3 DNS解析过程
+
+- DNS，domain name system，域名解析系统，Internet上作为域名和IP相互映射得一个分布式数据库，根据域名查出对应IP
+- DNS 解析过程（www.baidu.com）
+  1. 首先会查找浏览器缓存,看看否能找到www.baidu.com对应 IP 地址， 找到就直接返回；否则进行下一步。
+  2. 将请求发往给本地 DNS 服务器，如果查找到也直接返回，否则继续进行下一 步
+  3. 本地 DNS 服务器向根域名服务器发送请求，根域名服务器返回负责.com 顶级域名服务器 IP 地址列表
+  4. 本地 DNS 服务器再向其中一个负责.com 顶级域名服务器发送一个请求，返 回负责.baidu 权威域名服务器 IP 地址列表
+  5. 本地 DNS 服务器再向其中一个权威域名服务器发送一个请求，返回 www.baidu.com 所对应 IP 地址
+
+### 7.2.4 计算机攻击
+
+- CSRF，跨站请求伪造（英文全称 Cross-site request forgery），一种 挟制用户在当前已登录 Web 应用程序上执行非本意操作攻击方法
+
+  - ![image-20231204101709895](images\CSRF.png)
+
+  - 检查Referer 字段,添加校验 token
+
+- Dos，Denial of Service 拒绝服务，一切能引起DOS行为得攻击都被称为DOS攻击，常见Dos有计算机网络宽带攻击、连通性攻击
+
+- DDos，Distributed Denial of Service 分布式拒绝服务，指处于不同位置多个攻击者同时向一个或几个目标发动攻击，或者一个攻击者 控制了位于不同位置多台机器并利用这些机器对受害者同时实施攻击。常见 DDos 有 SYN Flood、Ping of Death、ACK Flood、UDP Flood 等
+
+- DRDoS，Distributed Reflection Denial of Service，分布式反射拒绝服务，该方式靠发送大量带有被害者 IP 地址数据包给攻击主机，然后 攻击主机对 IP 地址源做出大量回应，从而形成拒绝服务攻击
+
+- XSS，跨站脚本攻击（Cross-Site Scripting），因为会与层叠样式表(Cascading Style Sheets, CSS)缩写混淆，因此有人将跨站脚本攻击缩写为 XSS。恶意攻击者往 Web 页面里插入恶意 html 代码，当用户浏览该页之时，嵌入其中 Web 里面 html 代码会被执行，从而达到恶意攻击用户特殊目的。XSS 攻击一般分三种类型： 存储型 、反射型 、DOM 型 XSS
+
+  - ![image-20231204102916730](images\XSS.png)
+
+### 7.2.5 Socket和WebSocket
+
+- Socket 其实就等于 IP 地址 + 端口 + 协议，完成了对 TCP/IP 高度封装，屏蔽网络细 节，以方便开发者更好地进行网络编程，网编编程标准接口
+- WebSocket 一个持久化协议，它伴随 H5 而出协议，用来解决 http 不支持持久化连接问题，应用层通信协议
+
+### 7.2.6 forward和redirect
+
+- forward，直接转发方式，服务器转发方式，客户端和浏览器只发出一次请求， Servlet、HTML、JSP 或其它信息资源，由第二个信息资源响应该请求，在请 求对象 request 中，保存对象对于每个信息资源共享
+  - ![image-20231204103345665](images\forward.png)
+- redirect，间接转发方式，客户端转发方式，实际两次 HTTP 请求，服务器端在响应第一次 请求时候，让浏览器再向另外一个 URL 发出请求，从而达到转发目的
+  - ![image-20231204103313760](images\redirect.png)
+
+### 7.2.7 SQL注入
+
+- SQL注入，通过在 web 应用接口传入一些特殊参数字符，来欺应用服务器，执行恶意SQL 命 令，以达到非法获取系统信息目的
+- 防止sql注入
+  - 使用#{}而不${}，因为#{}一个参数占位符，对于字符串类型，会自动加上""，其他类型不加。由 于 Mybatis 采用预编译，其后参数不会再进行 SQL 编译，所以一定程度上防 止SQL 注入，`${}一个简单字符串替换`，字符串什么，就会解析成什么，存在 SQL 注入 风险
+  - 不要暴露一些不必要日志或者安全信息，比如避免直接响应一些 sql 异 常信息
+  - 不相信任何外部输入参数，过滤参数中含有一些数据库关键词关键词
+  - 适当权限控制
+
+### 7.2.8 URI和URL区别
+
+- URI，全称（ Uniform Resource Identifier)，中文翻译统一资源标志符，主 要作用唯一标识一个资源
+
+- URL，全称（Uniform Resource Location)，中文翻译统一资源定位符，主 要作用提供资源路径。 打个经典比喻吧，URI 像身份证，可以唯一标识一 个人，而 URL 更像一个住址，可以通过 URL 找到这个人
+
+- URL是一种具体的URI，它是URI的一个子集，它不仅唯一标识资源，而且还提供了定位该资源的信息。URI是一种语义上的抽象概念，可以是绝对的，也可以是相对的，而URL则必须提供足够的信息来定位，是绝对的。
+
+- URL组成部分
+
+  - 协议: 通常是https或者http。表示通过何种方式获取该资源。你可能还见过其他协议类型，比如ftp或者file，协议后面跟着://
+
+  - 主机名: 可以是一个已经在DNS服务器注册过的域名 —— 或者是一个IP地址 —— 域名就表示背后的IP地址。一组主要由数字组成的用于标识接入网络的设备的字符串。主机名后面可以指定端口，端口是可选的，如果不指定则使用默认端口，端口和主机名之间通过冒号隔开。
+
+  - 资源路径: 用于表示资源在主机上的文件系统路径。
+
+  - 可以在这之后通过问号连接可选的查询参数，如果有多个查询参数，通过&符连接
+
+  - 最后一项，如果需要的话可以添加#作为需要跳转的页面上的矛点名称。
+
+  - ```
+    protocol  ://  hostname / path ? query # fragment
+    ```
+
+### 7.2.9 Session和Cookie区别
+
+- Cookie
+  - 是客户端浏览器用来保存服务端数据的一种机制，当通过浏览器进行网页访问的时候，服务器可以把某一些状态数据以key-value的方式写入到Cookie 里面存储到客户端浏览器，然后客户端下一次再访问服务器的时候，就可以携带这些状态数据发送到服务器端，服务端可以根据 Cookie里面携带的内容来识别使用者
+- Session
+  - 表示一个会话，它是属于服务器端的容器对象，默认情况下，针对每一个浏览器的请求。 Servlet容器都会分配一个Session，Session本质上是一个ConcurrentHashMap，可以存储当前会话产生的一些状态数据。Session是用来弥补Http无状态的不足，简单来说，服务器端可以利用session来存储客户端在 同一个会话里面的多次请求记录基于服务端的session存储机制，再结合客户端的Cookie机制，就可以实现有状态的Http协议
+- 有状态的Http协议
+  - ![image-20231205133752345](images\statusHttp.png)
+- Cookie是客户端的存储机制，Session是服务端的存储机制
+
+## 7.3 传输层TCP
+
+### 7.3.1 TCP三次握手
+
+- 握手过程
+  1. 第一次握手(SYN=1, seq=x)，发送完毕后，客户端就进入 SYN_SEND 状态
+  2. 第二次握手(SYN=1, ACK=1, seq=y, ACKnum=x+1)， 发送完毕后，服务器 端就进入SYN_RCV 状态
+  3. 第三次握手(ACK=1，ACKnum=y+1)，发送完毕后，客户端进入 ESTABLISHED 状态，当服务器端接收到这个包时，也进入 ESTABLISHED 状态
+- 原因
+  - TCP是可靠性通信协议，所以通信双方都必须要维护一个序列号，去标记已经发送出去的数 据包，哪些是已经被对方签收的。而三次握手就是通信双方相互告知序列号的起始值，为了确保这个 序列号被收到，所以双方都需要有一个确认的操作
+  - TCP协议需要在一个不可靠的网络环境下实现可靠的数据传输，意味着通信双方必须要通过 某种手段来实现一个可靠的数据传输通道，而三次通信是建立这样一个通道的最小值。当然还可以四 次、五次，只是没必要浪费这个资源
+  - 防止历史的重复连接初始化造成的混乱问题，比如说在网络比较差的情况下，客户端连续多次发送建立连接的请求，假设只有两次握手，那么服务端只能选择接受或者拒绝这个连接请求，但是 服务端不知道这次请求是不是之前因为网络堵塞而过期的请求，也就是说服务端不知道当前客户端的 连接是有效还是无效
+
+### 7.3.2 TCP四次挥手
+
+- 挥手过程
+  1. 第一次挥手(FIN=1，seq=u)，发送完毕后，客户端进入 FIN_WAIT_1 状态
+  2. 第二次挥手(ACK=1，ack=u+1,seq =v)，发送完毕后，服务器端进入 CLOSE_WAIT 状态，客户端接收到这个确认包之后，进入 FIN_WAIT_2 状态。
+  3. 第三次挥手(FIN=1，ACK1,seq=w,ack=u+1)，发送完毕后，服务器端进入 LAST_ACK 状态，等待来自客户端最后一个 ACK。
+  4. 第四次挥手(ACK=1，seq=u+1,ack=w+1)，客户端接收到来自服务器端关闭请求，发送一个确认包，并进入 TIME_WAIT 状态，等待了某个固定时间（两 个最大段生命周期，2MSL，2 Maximum Segment Lifetime）之后，没有收到服务器端ACK ，认为服务器端已经正常关闭连接，于是自己也关闭连接， 进入 CLOSED 状态。服务器端接收到这个确认包之后，关闭连接，进入 CLOSED 状态
+- 2MSL，two Maximum Segment Lifetime，即两个最大段生命周期
+  - 为了保证客户端发送的最后一个 ACK 报文段能够到达服务端。 这个 ACK 报文段有可能丢失，因而使处在LAST-ACK 状态服务端就收不到，对已发送FIN + ACK 报文段的确认。服务端会超时重传这个 FIN+ACK 报文段，而客户端就能在 2MSL 时间内（超时 + 1MSL 传输）收到这个重传FIN+ACK 报文段。接着客户端重传一次确认，重新启动 2MSL 计时器。最后，客户端和 服务器都正常进入到 CLOSED 状态
+  - 防止已失效连接请求报文段出现在本连接中。客户端在发送完最后一个 ACK 报文段后，再经过时间 2MSL，就可以使本连接持续时间内所产生的所 有报文段都从网络中丢失。这样就可以使下一个连接中不会出现这种旧连接请求报文段
+
+### 7.3.3 TCP确保可靠性
+
+- TCP 连接基于三次握手，而断开则基于四次挥手。确保连接和断开可靠性
+- TCP 可靠性，还体现在有状态，TCP 会记录哪些数据发送了，哪些数据被 接收了，哪些没有被接受，并且保证数据包按序到达，保证数据传输不出差错
+- TCP 可靠性，还体现在可控制。它有数据包校验、ACK 应答、**超时重传(发送方)**、失序数据重传（接收方）、丢弃重复数据、流量控制（滑动窗口） 和拥塞控制等机制
+
+### 7.3.4 TCP重传机制
+
+- 超时重传
+  - 在发送数据报文时，设定一个定时器，每间隔一段时间间隔，如果没收到对方 ACK 应答报文，就会重发该报文
+  - RTT（Round-Trip Time，往返时间）一个数据包从发出去到回来ack时间，即数据包一次往返时间。超 时重传时间，就 Retransmission Timeout ，简称 RTO
+- 快速重传
+  - 快速重传机制，它不以时间驱动，而是以数据驱动。它基于接收端反馈信息 来引发重传
+  - 快速重传流程
+    1. 发送端发送了 1，2，3，4，5，6 份数据:
+    2. 第一份 Seq=1 先送到了，于是就 Ack 回2；
+    3. 第二份 Seq=2 也送到了，假设也正常，于是ACK 回 3；
+    4. 第三份 Seq=3 由于网络等其他原因，没送到；
+    5. 第四份 Seq=4 也送到了，但因为 Seq3 没收到。所以 ACK 回 3；
+    6. 后面Seq=5，6 也送到了，但ACK 还回复 3，因为Seq=3没收到。
+    7. 发送端连着收到三个重复冗余 ACK=3 确认（实际上 4 个，但前面一个正 常 ACK，后面三个才重复冗余），便知道哪个报文段在传输过程中丢失了， 于是在定时器过期之前，重传该报文段
+    8. 最后，接收端收到了 Seq3，此时因为 Seq=4，5，6 都收到了，于是ack回7
+  - 但快速重传还可能会有个问题：ACK 只向发送端告知最大有序报文段，到底 哪个报文丢失了呢？并不确定！那到底该重传多少个包呢？重传 Seq3 呢？还是重传 Seq3、Seq4、Seq5、Seq6 呢？因为发送端并 不清楚这三个连续的ACK3 是谁传回来。
+- 带选择确认的重传（SACK）
+  - SACK 机制就是，在快速重传的基础上，接收端返回最近收到报文段序列号范围，这样发送端就知道接收端哪些数据包没收到；
+- D-SACK
+  - 即Duplicate SACK（重复 SACK），在 SACK 的基础上做了一些 扩展，，主要用来告诉发送方，有哪些数据包自己重复接受了
+
+### 7.3.5 TCP滑动窗口
+
+- TCP 头部有个字段叫 win，也即那个 16 位窗口大小，它告诉对方本端TCP 接收缓冲区还能容纳多少字节数据，这样对方就可以控制发送数据速度，从而达到流量控制目的
+- 发送端的滑动窗口
+  - 已发送且已收到 ACK 确认
+  - 已发送但未收到 ACK 确认
+  - 未发送但可以发送
+  - 未发送也不可以发送
+  - ![image-20231204144138000](images\TCPWin.png)
+  - 虚线矩形框，就是发送窗口
+  - SND.WND: 表示发送窗口大小,上图虚线框格子数 14 个，即发送窗口大小  14。
+  - SND.NXT：下一个发送位置，它指向未发送但可以发送第一个字节序列号】
+  - SND.UNA: 一个绝对指针，它指向已发送但未确认第一个字节序列号。
+- 接收方滑动窗口
+  - 已成功接收并确认
+  - 未收到数据但可以接收
+  - 未收到数据并不可以接收的数据
+  - ![image-20231204144427723](images\TCPReceiveWin.png)
+  - 虚线矩形框，就是接收窗口
+  - REV.WND: 表示接收窗口的大小,上图虚线框的格子就是 9 个。
+  - REV.NXT:下一个接收✁位置，它指向未收到但可以接收的第一个字节序列号
+
+### 7.3.6 TCP流量控制
+
+1. 假如当前发送方给接收方发送了 200 个字节，那么，发送方SND.NXT会右移 200 个字节，也就说当前可用窗口减少了 200 个字节
+2. 接受方收到后，放到缓冲队列里面，REV.WND =400-200=200 字节，所以 win=200 字节返回给发送方。接收方会在 ACK 报文首部带上缩小后的滑动窗 口200 字节
+3. 发送方又发送 200 字节过来，200 字节到达，继续放到缓冲队列。不过这时候， 由于大量负载原因，接受方处理不了这么多字节，只能处理 100 字节，剩余 100 字节继续放到缓冲队列。这时候，REV.WND = 400-200-100=100 字 节，即 win=100 返回发送方
+4. 发送方继续干活，发送 100 字节过来，这时候，接受窗口 win 变为0
+5. 发送方停止发送，开启一个定时任务，每隔一段时间，就去询问接受方，直到 win 大于 0，才继续开始发
+
+### 7.3.7 TCP拥塞控制
+
+- 拥塞控制作用于网络，防止过多数据包注入到网络中，避免出现网络负 载过大情况。它目标主要最大化利用网络上瓶颈链路带宽
+- 流量控制作用于接收者✁，根据接收端的实际接收能 力控制发送速度，防止分组丢失
+- 发送方维护一个拥塞窗口 cwnd（congestion window） 变量，用来 估算在一段时间内这条链路（水管）可以承载和运输的数据（水）的数量，只要网络中没有出现拥塞，拥塞窗口值就可以再增大一些，以便把更多的数 据包发送出去，但只要网络出现拥塞，拥塞窗口的值就应该减小一些，以减少 注入到网络中的数据包数
+- 慢启动算法
+  - TCP 连接完成，初始化 cwnd = 1，表明可以传一个 MSS 单位
+  - 每当收到一个 ACK，cwnd 就加一
+  - 每当过了一个 RTT，cwnd 就增加一倍; 呈指数上升
+  - 慢启动阀值ssthresh（slow start threshold）状态变量。当 cwnd 到达该阀值后，就好像水管被关小了水龙头一样，减少拥塞状态。即当 cwnd >ssthresh 时，进 入了拥塞避免算法。
+- 拥塞避免算法
+  - 一般来说，慢启动阀值 ssthresh 是 65535 字节，cwnd到达慢启动阀值后
+    - 每收到一个 ACK 时，cwnd = cwnd + 1/cwnd 
+    - 当每过一个 RTT 时，cwnd = cwnd + 1
+- 拥塞发生
+  - 当网络拥塞发生丢包时，会有两种情况：RTO 超时重传、快速重传
+  - RTO 超时重传触发拥塞发生算法
+    - 慢启动阀值sshthresh = cwnd /2
+    - cwnd 重置为1
+    - 进入新的慢启动过程
+  - 快速重传
+    - 拥塞窗口大小 cwnd = cwnd / 2
+    - 慢启动阀值 ssthresh = cwnd
+    - 进入快速恢复算法
+- 快速恢复
+  - 快速重传和快速恢复算法一般同时使用
+  - cwnd = sshthresh + 3
+  - 重传重复那几个 ACK（即丢失的那几个数据包）
+  - 如果再收到重复的 ACK，那么 cwnd = cwnd + 1
+  - 如果收到新数据ACK 后, cwnd = sshthresh。因为收到新数据 ACK，表明 恢复过程已经结束，可以再次进入了拥塞避免算法
+
+### 7.3.8 半连接队列/SYN Flood
+
+- TCP进入三次握手前，服务端从CLOSED状态变为LISTEN状态，同时在内部创建了两个队列，半连接队列（SYN队列）和全连接队列（ACCEPT队列）
+- TCP 三次握手时，客户端发送 SYN 到服务端，服务端收到之后，便回复 ACK 和 SYN，状态由 LISTEN 变为SYN_RCVD，此时这个连接就被推入了 SYN 队 列，即半连接队列
+- 当客户端回复 ACK, 服务端接收后，三次握手就完成了。这时连接会等待被具体应用取走，在被取走之前，它被推入 ACCEPT 队列，即全连接队列
+- SYN Flood 是一种典型的DDos攻击，它在短时间内，伪造不存在的 IP地址, 向服务器大量发起 SYN 报文。当服务器回复 SYN+ACK 报文后，不会收到ACK 回应报文，导致服务器上建立大量半连接，半连接队列满了，这就无法处理正常TCP 请求
+  - syn cookie：在收到 SYN 包后，服务器根据一定的方法，以数据包源地址、 端口等信息为参数计算出一个 cookie 值作为自己 SYNACK 包序列号，回复 SYN+ACK 后，服务器并不立即分配资源进行处理，等收到发送方 ACK 包后，重新根据数据包源地址、端口计算该包中确认序列号否正确，如 果正确则立连接，否则丢弃该包
+  - SYN Proxy 防火墙：服务器防火墙会对收到每一个 SYN 报文进行代理和回 应，并保持半连接。等发送方将 ACK 包返回后，再重新构造SYN 包发到服务 器，建立真正的 TCP连接
+
+### 7.3.9 TCP粘包拆包
+
+![image-20231204153659491](images\TCP.png)
+
+- 要发送的数据小于 TCP 发送缓冲区大小，TCP 将多次写入缓冲区的数据一次 发送出去，将会发生粘包
+- 接收数据端应用层没有及时读取接收缓冲区中的数据，将发生粘包
+- 要发送的数据大于 TCP 发送缓冲区剩余空间大小，将会发生拆包；
+- 待发送数据大于 MSS（最大报文长度），TCP 在传输前将进行拆包。即 TCP 报文长度-TCP 头部长度>MSS
+- 解决方案
+  - 发送端将每个数据包封装为固定长度
+  - 在数据尾部增加特殊字符进行分割
+  - 将数据分为两部分，一部分头部，一部分内容体；其中头部结构大小固定，且 有一个字段声明内容体大小
+
+### 7.3.10 Nagle 算法与延迟确认
+
+- Nagle 算法基本定义：任意时刻，最多只能有一个未被确认小段。 所谓“小段”，指小于 MSS 尺寸数据块，所谓“未被确认”，指一个数据 块发送出去后，没有收到对方发送 ACK 确认该数据已收到
+- 实现规则
+  - 如果包长度达到 MSS，则允许发送
+  - 如果该包含有 FIN，则允许发送
+  - 设置了TCP_NODELAY 选项，则允许发送
+  - 未设置TCP_CORK 选项时，若所有发出去小数据包（包长度小于 MSS）均被确认，则允许发送
+  - 上述条件都未满足，但发生了超时（一般为 200ms），则立即发送
+- 延迟确认
+  - 接收方收到数据包后，如果暂时没有数据要发给对端，它可以等一段时再确认 （Linux 上默认40ms）。如果这段时间刚好有数据要传给对端，ACK 就随着数据传输，而不需要单独发送一次 ACK。如果超过时间还没有数据要发送， 也发送ACK，避免对端以为丢包
+  - 但有些场景不能延迟确认，比如发现了乱序包、接收到了大于一个 frame 报文，且需要调整窗口大小等
+  - Nagle 算法和延迟确认不能一起使用，Nagle 算法意味着延迟发， 延迟确认意味着延迟接收，酱紫就会造成更大延迟，会产生性能问题
+
+### 7.3.11 TCP和UDP对应应用层协议
+
+- TCP
+  - HTTP：HyperText Transfer Protocol（超文本传输协议），默认端口 80
+  - FTP: File Transfer Protocol (文件传输协议), 默认端口(20 用于传输数据， 21用于传输控制信息)
+  - SMTP: Simple Mail Transfer Protocol (简单邮件传输协议) ,默认端
+  - TELNET: Teletype over the Network (网络电传), 默认端口 23
+  - SSH： Secure Shell（安全外壳协议），默认端口 22
+- UDP
+  - DNS : Domain Name Service (域名服务),默认端口 53
+  - TFTP: Trivial File Transfer Protocol (简单文件传输协议)，默认端口 69
+  - SNMP：Simple Network Management Protocol（简单网络管理协议），通 过 UDP 端口 161 接收，只有 Trap 信息采用UDP 端口 162。
+
+### 7.3.12 TCP保活计时器
+
+- 服务器每收到一次客户数据，就重新设置保活计时器，时间设置通常两个小时。若两个小时都没有收到客户端数据，服务端就发送一个探测报文段，以后则每隔 75 秒钟发送一次。若连续发送 10 个探测报文段后仍然无客户端响应，服务端就认为客户端出了故障，接着就关闭这个连接
+
+## 7.4 网络层
+
+### 7.4.1 IP地址分类
+
+- IP 地址=网络号+主机号
+  - 网络号：它标志主机所连接网络地址表示属于互联网哪一个网络
+  - 主机号：它标志主机地址表示其属于该网络中哪一台主机
+- IP 地址分为 A，B，C，D，E 五大类
+  - A 类地址(1~126)：以 0 开头，网络号占前 8 位，主机号
+  - B 类地址(128~191)：以 10 开头，网络号占前 16 位，主机号占后面 16 位。
+  - C 类地址(192~223)：以 110 开头，网络号占前 24 位，主机号占后面8位
+  - D 类地址(224~239)：以 1110 开头，保留位多播地址
+  - E 类地址(240~255)：以 11110 开头，保留位为将来使用 
+  - ![image-20231204155657050](images\IP.png)
+  - 全为0的IP地址被保留为广播地址，而全为1的IP地址被保留为网络地址。因此，只有中间的数值范围（即1到254）可用于分配给特定主机
+
+### 7.4.2 ARP协议
+
+- ARP协议，Address Resolution Protocol，地址解析协议，用于实现IP地址到MAC地址的映射
+- ARP过程
+  1. 首先，每台主机都会在自己 ARP 缓冲区中建立一个 ARP 列表，以表 示 IP 地址和 MAC 地址对应关系
+  2. 当源主机需要将一个数据包要发送到目的主机时，会首先检查自己 ARP 列表，是否存在该 IP 地址对应MAC 地址；如果有，就直接将数据包发送到这个 MAC 地址；如果没有，就向本地网段发起一个 ARP 请 求广播包，查询此目的主机对应 MAC 地址。此 ARP 请求数据包 里，包括源主机 IP 地址、硬件地址、以及目的主机 IP 地址
+  3. 网络中所有主机收到这个 ARP 请求后，会检查数据包中目的 IP 是 否和自己 IP 地址一致。如果不相同，就会忽略此数据包；如果相同， 该主机首先将发送端MAC 地址和 IP 地址添加到自己 ARP 列表中， 如果 ARP 表中已经存在该 IP 信息，则将其覆盖，然后给源主机发送 一个 ARP 响应数据包，告诉对方自己是它需要查找的MAC 地址
+  4. 源主机收到这个 ARP 响应数据包后，将得到目的主机 IP 地址和 MAC 地址添加到自己 ARP 列表中，并利用此信息开始数据传输。 如果源主机一直没有收到 ARP 响应数据包，表示 ARP 查询失败
+- IP 地址和 MAC 地址， 但计算机IP 地址可由用户自行更改，管理起来就相对困难，而 MAC 地址不 可更改，所以一般会把 IP 地址和 MAC 地址组合起来使用
+- 对于目的地址在 其他子网数据包，路由只需要将数据包送到那个子网即可。 IP 地址和地域相关，对于同一个子网上 设备，IP 地址前缀都一样，这样路由器通过 IP 地址前缀就知道设备哪个子网上了
+- IP 地址可以比作为地址，MAC 地址为收件人，在一次通信过程中，两者缺 一不可
+
+# 八、Spring
+
+## 8.1 Spring 基础
+
+### 8.1.1 Spring 相同id
+
+- 同一个XML配置文件
+  - 不能存在id相同的两个bean，否则spring容器启动的 时候会报错
+  - Spring对XML文件进行解析转化为BeanDefinition的阶段
+- 不同的Spring配置文件
+  - 可以存在id相同的两个bean
+  - IOC容器在加载Bean的时候，默认会多个相同id的bean进行覆盖
+- 使用@Bean注 解实现Bean的声明
+  - 在同一个配置类里面声明多个相同名字的bean，在Spring IOC 容器中只会注册第一个声明的Bean的实例
+
+### 8.1.2 Spring解决循环依赖
+
+- Spring bean初始化精简流程
+
+  - 加载bean定义
+  - 创建装配流程
+    - 创建bean对象
+      1. 首先Spring容器启动之后，会根据使用不同类型的ApplicationContext，通过不同的方式去加载Bean配置，如xml方式、注解方式，将这些Bean配置加载到容器中，作为Bean定义包装成BeanDefinition对象保存起来，为下一步创建Bean做准备。
+      2. 根据加载的Bean定义信息，通过反射来创建Bean实例，如果是普通Bean，则直接创建Bean，如果是FactoryBean，说明真正要创建的对象为getObject()的返回值，调用getObject()将返回值作为Bean
+         - FactoryBean是一个工厂Bean，可以生成某一个类型Bean实例，它最大的一个作用是：可以让我们自定义Bean的创建过程。FactoryBean本质就是用来给我们实例化、或者动态的注入一些比较复杂的Bean，比如像一些接口的代理对象
+         - BeanFactory是Spring容器中的一个基本类也是很重要的一个类，在BeanFactory中可以创建和管理Spring容器中的Bean，它对于Bean的创建有一个统一的流程
+    - 装配bean属性
+    - 将完整的bean对象保存在Spring中
+  - 初始化流程
+    - 执行bean的前置处理器
+    - 执行afterPropertiesSet方法
+    - 执行bean的后置处理器
+
+- Spring通过三级缓存解决循环依赖
+
+  - 一级缓存：即单例对象缓存池，beanName->Bean，其中存储的就是实例化，属性赋值成功之后的单例对象
+
+    ```java
+    private final Map<String, Object> singletonObjectts = new ConcurrentHashMap<>(256);
+    ```
+
+  - 二级缓存：早期的单例对象，beanName->Bean，其中存储的是实例化之后，属性未赋值的单例对象，执行了工厂方法生产出来的Bean，bean被放进去之后， 当bean在创建过程中，就可以通过getBean方法获取到早期单例对象
+
+    ```java
+    private final Map<String, Object> earlySingletonobjects = new HashMap<>(16);
+    ```
+
+  - 三级缓存：单例工厂的缓存，beanName->ObjectFactory，添加进去的时候实例还未具备属性，用于保存beanName和创建bean的工厂之间的关系map
+
+    ```java
+    private final Map<String, ObjectFactory<?>>> siingletonFactories = new HashMap<>(16);
+    ```
+
+  - ![image-20231208102429210](images\ResolveCircular.png)
+
+- Spring中哪些情况下，不能解决循环依赖问题
+
+  - 多例Bean通过setter注入的情况，不能解决循环依赖问题
+    - A --> B --> A，且 A,B 都是 scope=prototype
+    - A 实例创建后，populateBean 时，会触发 B 的加载， B 实例创建后，populateBean 时，会触发 A 的加载。由于A的scope=prototype，从缓存中获取不到 A，要创建一个全新的 A。这样，就会进入一个死循环
+  - 构造器注入的Bean的情况，不能解决循环依赖问题
+    -  A --> B --> A，且 都是通过构造函数依赖的
+    - A 实例在创建时(createBeanInstance)，由于是构造注入，这时会触发 B 的加载，B 实例在创建时(createBeanInstance)，又会触发 A 的加载，此时，A 还没有添加到三级缓存中，所以就会创建一个全新的 A。这样，就会进入一个死循环
+  - @Async 增强的 Bean 的循环依赖，不能解决循环依赖问题
+    - A --> B --> A, 且 A 是被 @Async 标记的类
+
+### 8.1.3 BeanFactory和FactoryBean
+
+- BeanFactory
+  - 保存了所有需要对外提供的Bean的实例
+  - 相当于是IOC（控制反转）容器的顶级接口，是IOC容器最基础的实现
+  - 完成对Bean的依赖注入（DI）
+- FactoryBean
+  - FactoryBean是一个工厂Bean，它是一个接口，主要的功能是动态生成某一个类型的 Bean的实例，也就是说，我们可以自定义一个Bean并且加载到IOC容器里面。
+  -  它里面有一个重要的方法叫getObject()，这个方法里面就是用来实现动态构建Bean的过 程。 
+  - Spring Cloud里面的OpenFeign组件，客户端的代理类，就是使用了FactoryBean来实现 的
+
+### 8.1.4  Spring Bean的生命周期（作用域）
+
+- singleton，也就是单例，意味着在整个Spring容器中只会存在一个Bean实例。
+- prototype，翻译成原型，意味着每次从IOC容器去获取指定Bean的时候，都会返回一个 新的实例对象
+- 在基于Spring框架下的Web应用
+  - request，针对每一次http请求，都会创建一个新的Bean
+  - session，以sesssion会话为纬度，同一个session共享同一个Bean实例，不同的session 产生不同的Bean实例
+  - globalSession，针对全局session纬度，共享同一个Bean实例
+
+### 8.1.5 Spring事务的传播行为
+
+- REQUIRED：默认的Spring事物传播级别，如果当前存在事务，则加入这个事务，如果不存在事务，就新建一个事务
+- REQUIRE_NEW：不管是否存在事务，都会新开一个事务，新老事务相互独立。外部事务抛出异常回滚不会影响内部事务的正常提交
+- NESTED：如果当前存在事务，则嵌套在当前事务中执行（嵌套事务是一种特殊的事务，它可以独立于外部事务进行回滚，但提交时仍依赖于外部事务。这种传播行为适用于需要在单个事务内执行多个独立操作的场景。）。如果当前没有事务，则新建一 个事务
+- SUPPORTS：表示支持当前事务，如果当前不存在事务，以非事务的方式执行
+- NOT_SUPPORTED：表示以非事务的方式来运行，如果当前存在事务，则把当前事务挂起
+- MANDATORY：强制事务执行，若当前不存在事务，则抛出异常
+- NEVER：以非事务的方式执行，如果当前存在事务，则抛出异常
+- 示例：不同传播行为的使用场景
+  - 假设有一个银行转账的业务场景，涉及到两个方法：transfer 和 audit。transfer 方法负责实际转账操作，audit 方法负责记录转账操作的审计日志
+  - 使用 REQUIRED 传播行为：转账和审计操作在同一个事务中执行，要么都成功，要么都失败。
+  - 使用 REQUIRES_NEW 传播行为：转账和审计操作在不同的事务中执行，互不影响
+  - 使用 NESTED 传播行为：转账和审计操作在嵌套事务中执行，审计操作可以独立回滚，但提交依赖于转账操作
+
+## 8.2 Spring 核心
+
+### 8.2.1 Spring Bean生命周期的执行流程
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
