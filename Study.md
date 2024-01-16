@@ -135,15 +135,57 @@
 
 - 而B+树由于叶子结点都有链表，且链表是以从小到大的顺序排好序的，因此可以直接通过遍历链表实现范围查找
 
-# 二、算法
+# 二、设计模式
 
-## 2.1 滑动窗口+HashMap
+## 2.1 简单工厂模式
 
-- 用来处理从左到右满足条件的数据
+### 2.1.1 简述
 
-## 2.2 二分查找法
+- 创建型模式，类模式
+- 到底要实例化谁,将来会不会增加实例化的对象,比如增加开根运算,这是很容易变化的地方,应该考虑用一个单独的类来做这个创造实例的过
+  程,这就是工厂
 
-- 用来将O(n)级别调整为O($log^n$)
+### 2.1.2 UML图
+
+![image-20240116140938035](images\SimpleFactory.png)
+
+## 2.2 策略模式
+
+### 2.2.1 简述
+
+- 行为型模式，对象模式
+- 它定义了算法家族,分别封装起来,让它们之间可以互相替换,此模式让算法的变化,不会影响到使用算法的客户。
+- 策略模式和简单工厂非常相似，结构基本上一样，但是它们侧重点不一样
+  - 策略模式：是一个行为模式，解决策略的切换和扩展，让策略独立于客户端
+  - 简单工厂模式：是一种创建模式「创建对象」，接收指令创建出具体的对象，让对象的创建和具体的使用客户无关
+
+### 2.2.2 UML图
+
+![image-20240116144739070](images\Strategy.png)
+
+## 2.3 装饰模式
+
+### 2.3.1 简述
+
+- 结构型模式，对象模式
+- 装饰模式是为已有功能动态地添加更多功能的一种方式，把每个要装饰的功能放在单独的类中,并让这个类包装它所要装饰的对象,因此,当需要执行特殊行为时,客户代码就可以在运行时根据需要有选择地、按顺序地使用装饰功能包装对象了,把类中的装饰功能从类中搬移去除,这样可以简化原有的类，有效地把类的核心职责和装饰功能区分开了。而且可以去除相关类中重复的装饰逻辑。
+
+### 2.3.2 UML图
+
+![image-20240116160110652](images\Decorator.png)
+
+- 如果只有一个ConcreteComponent类而没有抽象的Component类,那么Decorator类可以是ConcreteComponent的一个子类。同样道理如果只有一个ConcreteDecorator类,那么就没有必要建立一个单独的Decorator类,而可以把Decorator 和ConcreteDecorator的责任合并成一个类。
+
+## 2.4 代理模式
+
+### 2.4.1 简述
+
+- 结构型模式，对象模式
+- 代理模式(Proxy),为其他对象提供一种代理以控制对这个对象的访问。
+
+### 2.4.2 UML图
+
+![image-20240116171549158](images\ProxyImg.png)
 
 # 三、Java
 
@@ -368,14 +410,120 @@
 
 ### 3.1.6 面向对象原则
 
-- 单一职责原则:一个类只做它该做事情
-- 开闭原则：软件实体应当对扩展开放，对修改关闭
+- 单一职责原则:一个类只做它该做事情，就一个类而言,应该仅有一个引起它变化的原因。
+- 开放封闭原则：软件实体应当对扩展开放，对修改关闭
 - 依赖倒转原则：面向接口编程
+- 里氏代换原则：子类型必须能够替换掉它们的父类型
 - 接口隔离原则：接口要小而专，绝不能大而全
 - 合成聚合复用原则：优先使用聚合或合成关系复用代码
 - 迪米特法则：迪米特法则又叫最少知识原则，一个对象应当对其他对象有尽可能少了解
 
+### 3.1.7 反射详解
 
+- 在Java中，每个类都有一个与之关联的Class对象。这个Class对象实际上是一个元数据，它包含了关于该类的所有信息，例如类的名称、父类、实现的接口、声明的字段和方法等。
+
+- 正常类加载过程
+
+  - 当执行new Student()，会触发JVM加载Student.class文件
+  - JVM从本地磁盘找到Student.class文件并加载到JVM内存中
+  - .class文件加载入内存后，JVM会自动创建一个class对象(Class)，一个类只会产生一个class对象
+  - 得到class对象(Class)后，反向获取Student对象的各种信息
+
+- 获取class的Class实例
+
+  - 知道具体类的情况下可以使用： 直接通过一个 class 的静态变量 class 获取
+  - 通过 Class.forName()传入类的路径获取： 如果知道一个 class 的完整类名，可以通过静态方法 Class.forName() 获取
+  - 通过对象实例instance.getClass()获取： 如果我们有一个实例变量，可以通过该实例变量提供的 getClass() 方法获取
+  - 通过类加载器xxxClassLoader.loadClass()传入类路径获取
+
+- 因为 Class 实例在JVM中是唯一的，获取的 Class 实例是同一个实例。可以用== 比较两个 Class 实例：
+
+- 通常情况下，我们应该用 instanceof 判断数据类型，因为面向抽象编程的时候，我们不关心具体的子类型。只有在需要精确判断一个类型是不是某个 class 的时候，我们才使用 == 判断 class 实例
+
+- newInstance()创建此 Class 对象所表示的类的一个新实例
+
+- JVM在执行Java程序的时候，并不是一次性把所有用到的class全部加载到内存，而是第一次需要用到class时才加载，动态加载 class 的特性对于Java程序非常重要。利用JVM动态加载 class 的特性，我们才能在运行期根据条件加载不同的实现类。 JVM为每个加载的 class 及 interface 创建了对应的 Class 实例来保存 class 及 interface 的所有信息；  获取一个 class 对应的 Class 实例后，就可以获取该 class 的所有信息；  通过Class实例获取 class 信息的方法称为反射（Reflection）；  JVM总是动态加载 class ，可以在运行期根据条件来控制加载class。
+
+- Field 成员变量：每个成员变量有类型和值。java.lang.reflect.Field 为我们提供了获取当前对象的成员变量的类型，和重新设值的方法。
+
+  - Field getField(name)：根据字段名（成员变量）获取某个public的filed（包括父类）
+  - Field getDeclaredField(name)：根据字段名（成员变量）获取当前类的某个field（不包括父类）
+  - Field[] getFields()：获取所有public的field（包括父类）
+  - Field[] getDeclaredFields()：获取当前类的所有field（不包括父类）
+  - Field.setAccessible(true) 的意思是 ，一律允许访问
+  - 如果JVM运行期存在 SecurityManager ，那么它会根据规则进行检查，有可能阻止 setAccessible(true) 
+  - Field.get(Object) 获取指定实例的指定字段的值
+  - Field.set(Object, Object) 实现的，其中第一个 Object 参数是指定的实例，第二个 Object 参数是待修改的值
+
+- Method 信息
+
+  - Method getMethod(name, Class...) ：获取某个 public 的 Method （包括父类）
+  - Method getDeclaredMethod(name, Class...) ：获取当前类的某个 Method （不包括父类）
+  - Method[] getMethods() ：获取所有 public 的 Method （包括父类）
+  - Method[] getDeclaredMethods() ：获取当前类的所有 Method （不包括父类）
+  - 如果获取到的Method表示一个静态方法，调用静态方法时，由于无需指定实例对象，所以invoke 方法传入的第一个参数永远为 null 
+  - 调用非public方法，我们通过Method.setAccessible(true) 允许其调用：
+  - 使用反射调用方法时，仍然遵循多态原则：即总是调用实际类型的覆写方法（如果存在）
+
+- Constructor对象
+
+  - 调用Class.newInstance()的局限是，它只能调用该类的public无参数构造方法。如果构造方法带有参数，或者不是public，就无法直接通过Class.newInstance()来调用。
+  - getConstructor(Class…) ：获取某个 public 的 Constructor ；
+  - getDeclaredConstructor(Class…) ：获取某个 Constructor ；
+  - getConstructors() ：获取所有 public 的 Constructor ；
+  - getDeclaredConstructors() ：获取所有 Constructor 。
+  - 注意 Constructor 总是当前类定义的构造方法，和父类无关，因此不存在多态的问题
+  - 调用非 public 的 Constructor 时，必须首先通过 setAccessible(true) 设置允许访问
+
+- getSuperclass()获取父类的Class
+
+- getInterfaces()获取interface,只返回当前类直接实现的接口类型，并不包括其父类实现的接口类型：
+
+- 通过 Class 对象的 isAssignableFrom() 方法可以判断一个向上转型是否可以实现。
+
+  ```java
+  Integer.class.isAssignableFrom(Number.class); // false，因为Number不能赋值给Integer
+  Number.class.isAssignableFrom(Integer.class); // true，因为Integer可以赋值给Number 
+  ```
+
+### 3.1.8 注解详解
+
+- @Target 用来约束注解可以应用的地方（如方法、类或字段），其中ElementType是枚举类型
+
+- @Retention用来约束注解的生命周期，分别有三个值，源码级别（source），类文件级别（class）或者运行时级别（runtime）
+
+  - SOURCE：注解将被编译器丢弃（该类型的注解信息只会保留在源码里，源码经过编译后，注解信息会被丢弃，不会保留在编译好的class文件里）
+  - CLASS：注解在class文件中可用，但会被VM丢弃（该类型的注解信息会保留在源码里和class文件里，在执行的时候，不会加载到虚拟机中），请注意，当注解未定义Retention值时，默认值是CLASS，如Java内置注解，@Override、@Deprecated、@SuppressWarnning等
+  - RUNTIME：注解信息将在运行期(JVM)也保留，因此可以通过反射机制读取注解的信息（源码、class文件和执行的时候都有注解的信息），如SpringMvc中的@Controller、@Autowired、@RequestMapping等。
+  - 这3个生命周期分别对应于：Java源文件(.java文件) ---> .class文件 ---> 内存中的字节码。
+  - 一般如果需要在运行时去动态获取注解信息，那只能用 RUNTIME 注解，比如@Deprecated使用RUNTIME注解
+  - 如果要在编译时进行一些预处理操作，比如生成一些辅助代码（如 ButterKnife），就用 CLASS注解；
+  - 如果只是做一些检查性的操作，比如 @Override 和 @SuppressWarnings，使用SOURCE 注解。
+
+- 注解本质是一个继承了Annotation 的特殊接口，所以注解也叫声明式接口
+
+- 元注解是能够用于定义注解的注解
+
+- 自定义注解
+
+  - 新建注解文件, @interface定义注解
+
+  - 添加参数、默认值
+
+  - 用元注解配置注解
+
+    ```java
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    public @interface MyReport {
+        String name() default "";
+        int value() default 0;
+    }
+    ```
+
+- 自定义注解的读取
+
+  - 通过反射获取自定义注解信息
 
 ## 3.2 Java容器（jdk1.8）
 
@@ -1180,7 +1328,7 @@ ticketCondition.signal();
 
 ### 3.3.10 J.U.C - AQS
 
-java.util.concurrent（J.U.C）⼤⼤提⾼了并发性能，AQS 被认为是 J.U.C 的核⼼
+java.util.concurrent（J.U.C）⼤⼤提⾼了并发性能，AQS（AbstractQueuedSynchronizer） 被认为是 J.U.C 的核⼼，用于实现基于FIFO等待队列的阻塞锁和相关的同步器
 
 - CountDownLatch
 
@@ -4702,15 +4850,421 @@ HTTPS= HTTP+SSL/TLS，可以理解 Https身披SSL(Secure SocketLayer，安全套
   - 使用 REQUIRES_NEW 传播行为：转账和审计操作在不同的事务中执行，互不影响
   - 使用 NESTED 传播行为：转账和审计操作在嵌套事务中执行，审计操作可以独立回滚，但提交依赖于转账操作
 
-## 8.2 Spring 核心
+## 8.2 Spring 核心-IOC
 
-### 8.2.1 Spring Bean生命周期的执行流程
+### 8.2.1 Spring框架概述
 
-
-
-
+![image-20231213142018727](images\SpringTree.png)
 
 
+
+- 整个Spring框架构建在Core核心模块之上，它是整个框架的基础。在该模块中，Spring为我们提供了一个IoC（Inversion of Control/控制反转）容器（IoC Container）实现，用于帮助我们以依赖注入的方式管理对象之间的依赖关系，Core核心模块中还包括框架 内部使用的各种工具类（如果愿意，我们也可以在框架之外使用），比如Spring的基础IO工具类
+- AOP（Aspect Oriented Programming/面向切面编程）框架，让我们可以以AOP的形式增强各POJO的能力，进而补足OOP（Object Oriented Programming/面向对象编程）/OOSD（Object Oriented Design/面向对象设计）之缺憾
+- Spring框架在Core核心模块和AOP模块的基础上，为我们提供了完备的数据访问和事务管理的抽象和集成服务，Spring框架为各种当前业界流行的ORM产品，比如Hibernate、iBATIS、Toplink、 JPA等提供了形式统一的集成支持
+- Spring框架为我们提供了针对Java EE服务的集成服务
+  - java EE（Java Enterprise Edition/java平台企业版），它包括用于Web开发的Servlet、JSP和JSF技术，以及用于企业级应用的EJB、JMS、JTA等
+    - JNDI (Java Naming and Directory Interface)，JNDI是Java EE的一部分，它提供了一个接口，用于查找和访问各种命名和目录服务
+    - JMS (Java Message Service)，JMS是Java技术的一部分，它提供了一个消息传递的接口和API，用于实现异步通信
+    - JavaMail，JavaMail是Java EE和Java SE的一部分，它提供了一个API，用于发送和接收电子邮件
+- Spring框架提供了一套自己的Web MVC框架
+
+### 8.2.2 IOC基本概念
+
+- IOC，Inversion of Control，控制反转，别名依赖注入DI，Dependency  Injection，让别人为你服务
+- 通常情况下，被注入对象会直接依赖于被依赖对象。但是，在IoC的场景中，二者之间通过IoC Service  Provider来打交道，所有的被注入对象和依赖对象现在由IoC Service Provider统一管理
+- ![image-20231213150049955](images\IOCBeforeAfter.png)
+- 依赖注入的方式
+  - 构造方法注入
+    - 这种注入方式的优点就是，对象在构造完成之后，即已进入就绪状态，可以马上使用。缺点就是，当依赖对象比较多的时候，构造方法的参数列表会比较长。而通过反 射构造对象的时候，对相同类型的参数的处理会比较困难，维护和使用上也比较麻烦。而且 在Java中，构造方法无法被继承，无法设置默认值。对于非必须的依赖处理，可能需要引入多 个构造方法，而参数数量的变动可能造成维护上的不便
+
+  - setter方法注入
+    - 因为方法可以命名，所以setter方法注入在描述性上要比构造方法注入好一些。 另外，setter方法可以被继承，允许设置默认值，而且有良好的IDE支持。缺点当然就是对象无 法在构造完成后马上进入就绪状态
+
+  - 接口注入
+    - 从注入方式的使用上来说，接口注入是现在不甚提倡的一种方式，基本处于“退 役状态”。因为它强制被注入对象实现不必要的接口，带有侵入性。而构造方法注入和setter 方法注入则不需要如此。
+
+### 8.2.3 IOC Service Provider
+
+- 职责
+  - 业务对象的构建管理，IoC Service Provider需要将对象的构建逻辑从客户端对象那里剥离出来，以免这部分逻辑污染业务对象的实现
+  - 业务对象间的依赖绑定，IoC Service  Provider通过结合之前构建和管理的所有业务对象，以及各个业务对象间可以识别的依赖关系，将这些对象所依赖的对象注入绑定，从而保证每个业务对象在使用的时候，可以处于就绪状 态。
+- 注册对象管理信息
+  - 直接编码方式	
+    - 以通过程序编码的方式将被注入对象和依赖对象注册到容器中，并明确它们相互之间的依赖注入关系
+  - 配置文件方式
+    - 像普通文本文件、properties文件、XML文件等，都可以成为管理依赖注入关系的载体
+  - 元数据方式
+    - 直接在类中使用元数据信息来标注各个对象之间的依赖关系，然后由框架根据这些注解所提供的信息将这些对象组装后，交给客户端对象使用
+
+### 8.2.4 Spring IOC 容器 - BeanFactory
+
+在Spring的IoC容器之上，Spring还提供了 相应的AOP框架支持、企业级服务集成等服务。Spring的IoC容器和IoC Service Provider所提供的服务 之间存在一定的交集
+
+![image-20231222140706255](images\SpringIOC.png)
+
+- 容器类型
+  - BeanFactory
+    - 基础类型IoC容器，提供完整的IoC服务支持。如果没有特殊指定，默认采用延迟初始化策略（lazy-load）。只有当客户端对象需要访问容器中的某个受管对象的时候，才对 该受管对象进行初始化以及依赖注入操作。所以，相对来说，容器启动初期速度较快，所需要的资源有限。对于资源有限，并且功能要求不是很严格的场景，BeanFactory是比较合适的 IoC容器选择
+  - ApplicationContext
+    - ApplicationContext在BeanFactory的基础上构建，是相对比较高级的容器实现，除了拥有BeanFactory的所有支持，ApplicationContext还提供了其他高级特性，比如事件发布、国际化信息支持等，在该类型容器启动之后，默认全部初始化并绑定完成。所以，相对于BeanFactory来说，ApplicationContext要求更多的系统资源，同时，因为在启动时就完成所有初始化，容器启动时间较之BeanFactory也会长一些。在那些系统资源充足，并且要求更多功能的场景中， ApplicationContext类型的容器是比较合适的选择。
+
+- 对象注册与依赖绑定方式
+
+  - 直接编码
+  - 外部配置文件方式
+    - Properties
+    - XML
+
+  - 注解方式
+
+- &lt;beans&gt;属性详解
+
+  - &lt;beans&gt;是XML配置文件中的最顶层的元素，它下面可以包含0或者1个&lt;description&gt;和多个&lt;bean&gt;以及&lt;import&gt;或者&lt;alias&gt;
+  - beans是所有bean的父级，拥有对应属性对bean进行统一的默认行为设置
+  - default-lazy-init。 其值可以指定为true或者false，默认值为false。用来标志是否对所有的bean进行延迟初始化
+  - default-autowire。可以取值为no、byName、byType、constructor以及autodetect。默 认值为no，如果使用自动绑定的话，用来标志全体bean使用哪一种默认绑定方式
+  - default-dependency-check。可以取值none、objects、simple以及all，默认值为none， 即不做依赖检查。
+  - default-init-method。如果所管辖的按照某种规则，都有同样名称的初始化方法的 话，可以在这里统一指定这个初始化方法名，而不用在每一个上都重复单独指定。
+  - default-destroy-method。与default-init-method相对应，如果所管辖的bean有按照某种 规则使用了相同名称的对象销毁方法，可以通过这个属性统一指定。
+
+- description属性详解
+
+  - 在配置的文件中指定一些描述性的信息
+
+- import 属性详解
+
+  - 在 想加载主要配置文件，并将主要配置文件所依赖的配置文件同时加载时，可以在这个主要的配置文件 中通过import 元素对其所依赖的配置文件进行引用
+
+    ```xml
+    <import resource="B.xml"/>
+    ```
+
+-  alias属性详解
+
+  - 为某些bean起一些“外号”（别名），通常情况下是为了减少输入
+
+    ```xml
+    <alias name="dataSourceForMasterDatabase" alias="masterDataSource"/>
+    ```
+
+- bean属性详解
+
+  - id属性
+
+    - 通过id属性来指定当前注册对 象的beanName是什么
+
+      ```xml
+      <bean id="djNewsListener" name="/news/djNewsListener,dowJonesNewsListener" class="..impl.DowJonesNewsListener"> 
+      </bean> 
+      ```
+
+    - name属性的灵活之处在于，name可以使用id不能使用的一些字符，比如/。而且 还可以通过逗号、空格或者冒号分割指定多个name。name的作用跟使用为id指定多个别名基 本相同
+
+  - class属性
+
+    - 每个注册到容器的对象都需要通过元素的class属性指定其类型
+
+
+### 8.2.5 Spring IOC启动
+
+- 容器启动伊始，首先会通过某种途径加载Configuration MetaData。除了代码方式比较直接，在大 部分情况下，容器需要依赖某些工具类（BeanDefinitionReader）对加载的Configuration MetaData进行解析和分析，并将分析后的信息编组为相应的BeanDefinition，最后把这些保存了bean定义必 要信息的BeanDefinition，注册到相应的BeanDefinitionRegistry，这样容器启动工作就完成了
+
+- 经过第一阶段，现在所有的bean定义信息都通过BeanDefinition的方式注册到了BeanDefinitionRegistry中。当某个请求方通过容器的getBean方法明确地请求某个对象，或者因依赖关系容器 需要隐式地调用getBean方法时，就会触发第二阶段的活动。 该阶段，容器会首先检查所请求的对象之前是否已经初始化。如果没有，则会根据注册的 BeanDefinition所提供的信息实例化被请求对象，并为其注入依赖。如果该对象实现了某些回调接口，也会根据回调接口的要求来装配它。当该对象装配完毕之后，容器会立即将其返回请求方使用。 如果说第一阶段只是根据图纸装配生产线的话，那么第二阶段就是使用装配好的生产线来生产具体的 产品了
+
+- Spring提供了一种叫做BeanFactoryPostProcessor的容器扩展机制。该机制允许我们在容器实 例化相应对象之前，对注册到容器的BeanDefinition所保存的信息做相应的修改
+
+  - PropertyPlaceholderConfigurer
+
+    - PropertyPlaceholderConfigurer允许我们在XML配置文件中使用占位符（PlaceHolder）， 并将这些占位符所代表的资源单独配置到简单的properties文件中来加载。
+    - 当BeanFactory在第一阶段加载完成所有配置信息时，BeanFactory中保存的对象的属性信息还只是以占位符的形式存在，如\${jdbc.url}、\${jdbc.driver}。当 PropertyPlaceholderConfigurer作为BeanFactoryPostProcessor被应用时，它会使用properties 配置文件中的配置信息来替换相应BeanDefinition中占位符所表示的属性值。这样，当进入容器实 现的第二阶段实例化bean时，bean定义中的属性值就是最终替换完成的了
+
+  - PropertyOverrideConfigurer
+
+    - 可以通过PropertyOverrideConfigurer对容器中配置的任何你想处理的bean定义的property信息进行覆盖替换。
+
+      ```properties
+      beanName.propertyName=value
+      
+      # pool-adjustment.properties
+      dataSource.minEvictableIdleTimeMillis=1000 
+      dataSource.maxActive=50 
+      ```
+
+      ```xml
+      <bean class="org.springframework.beans.factory.config.PropertyOverrideConfigurer"> 
+       <property name="location" value="pool-adjustment.properties"/> 
+      </bean> 
+      ```
+
+  - CustomEditorConfigurer
+
+    - 其他两个BeanFactoryPostProcessor都是通过对BeanDefinition中的数据进行变更以达到某 种目的。与它们有所不同，CustomEditorConfigurer是另一种类型的BeanFactoryPostProcessor实 现，它只是辅助性地将后期会用到的信息注册到容器，对BeanDefinition没有做任何变动
+
+- ![image-20231229145510805](images\createBean.png)
+
+- Bean的实例化与BeanWrapper
+
+  - 容器在内部实现的时候，采用“策略模式（Strategy Pattern）”来决定采用何种方式初始化bean实例。 通常，可以通过反射或者CGLIB动态字节码生成来初始化相应的bean实例或者动态生成其子类。
+  - 容器只要根据相应bean定义的BeanDefintion取得实例化信息，结合CglibSubclassingInstantiationStrategy以及不同的bean定义类型，就可以返回实例化完成的对象实例。但是，返回方 式上有些“点缀”。不是直接返回构造完成的对象实例，而是以BeanWrapper对构造完成的对象实例 进行包裹，返回相应的BeanWrapper实例。
+  - BeanWrapper接口通常在Spring框架内部使用，它有一个实现类org.springframework.beans.BeanWrapperImpl。其作用是对某个bean进行“包裹”，然后对这个“包裹”的bean进行操作，比如设置或者获取bean的相应属性值。而在第一步结束后返回BeanWrapper实例而不是原先的对象实例， 就是为了第二步“设置对象属性”
+  - Spring会根据对象实例构造一个BeanWrapperImpl实例,然后将之前CustomEditorConfigurer注册的PropertyEditor复制一份给BeanWrapperImpl实例这样，当BeanWrapper转换类型、设置对象属性值时，就不会无从下手了
+
+- 各色的Aware接口
+
+  - org.springframework.beans.factory.BeanNameAware。如果Spring容器检测到当前对象实 例实现了该接口，会将该对象实例的bean定义对应的beanName设置到当前对象实例
+  - org.springframework.beans.factory.BeanClassLoaderAware。如果容器检测到当前对 象实例实现了该接口，会将对应加载当前bean的Classloader注入当前对象实例。默认会使用 加载org.springframework.util.ClassUtils类的Classloader
+  - org.springframework.beans.factory.BeanFactoryAware。在介绍方法注入的时候，我们 提到过使用该接口以便每次获取prototype类型bean的不同实例。如果对象声明实现了 BeanFactoryAware接口，BeanFactory容器会将自身设置到当前对象实例。这样，当前对象 实例就拥有了一个BeanFactory容器的引用，并且可以对这个容器内允许访问的对象按照需要 进行访问。
+  - org.springframework.context.ResourceLoaderAware 。 ApplicationContext 实现了 Spring的ResourceLoader接口。当容器检测到当前对象实例实现了 ResourceLoaderAware接口之后，会将当前ApplicationContext自身设置到对象实例，这样 当前对象实例就拥有了其所在ApplicationContext容器的一个引用
+  - org.springframework.context.ApplicationEventPublisherAware。ApplicationContext 作为一个容器，同时还实现了ApplicationEventPublisher接口，这样，它就可以作为ApplicationEventPublisher来使用。所以，当前ApplicationContext容器如果检测到当前实例 化的对象实例声明了ApplicationEventPublisherAware接口，则会将自身注入当前对象
+  - org.springframework.context.MessageSourceAware。ApplicationContext通过MessageSource接口提供国际化的信息支持，即（Internationalization）。它自身就实现了MessageSource接口，所以当检测到当前对象实例实现了MessageSourceAware接口，则会将自身注入 当前对象实例。
+
+- BeanPostProcessor
+
+  - BeanPostProcessor的概念容易与BeanFactoryPostProcessor的概念混淆。但只要记住BeanPostProcessor是存在于对象实例化阶段，而BeanFactoryPostProcessor则是存在于容器启动阶段， 这两个概念就比较容易区分了。
+
+  - BeanFactoryPostProcessor通常会处理容器内所有符合条件的BeanDefinition类似，BeanPostProcessor会处理容器内所有符合条件的实例化后的对象实例。该接口声明了两个方法，分别在 两个不同的时机执行
+
+    ```java
+    public interface BeanPostProcessor
+    { 
+     Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException; 
+     Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException; 
+    }
+    ```
+
+- InitializingBean和init-method
+
+  - ```java
+    public interface InitializingBean { 
+     void afterPropertiesSet() throws Exception; 
+    }
+    ```
+
+  - 在对象实例化过程调用过“BeanPostProcessor的前置处理” 之后，会接着检测当前对象是否实现了InitializingBean接口，如果是，则会调用其afterPropertiesSet()方法进一步调整对象实例的状态。比如，在有些情况下，某个业务对象实例化完成后，还 不能处于可以使用状态。这个时候就可以让该业务对象实现该接口，并在方法afterPropertiesSet() 中完成对该业务对象的后续处理
+
+  - Spring还提供了另一种方式来指定自定义的对象初始化操作，那就 是在XML配置的时候，使用的init-method属性。 通过init-method，系统中业务对象的自定义初始化操作可以以任何方式命名，而不再受制于 InitializingBean的afterPropertiesSet()。
+
+- DisposableBean与destroy-method
+
+  - 与InitializingBean和init-method用于对象的自定义初始化相对应，DisposableBean和 destroy-method为对象提供了执行自定义销毁逻辑的机会
+  - 对于BeanFactory容器来说。我们需要在独立应用程序的主程序退出之前，或者其他被认为是合 适的情况下（依照应用场景而定），调用ConfigurableBeanFactory提供的 destroySingletons()方法销毁容器中管理的所有singleton类型的对象实例
+  - 对于ApplicationContext容器来说。道理是一样的。但AbstractApplicationContext为我们 提供了registerShutdownHook()方法，该方法底层使用标准的Runtime类的addShutdownHook()方 式来调用相应bean对象的销毁逻辑，从而保证在Java虚拟机退出之前，这些singtleton类型的bean对象 实例的自定义销毁逻辑会被执行
+
+### 8.2.6 Spring IOC 容器 - ApplicationContext
+
+- 常用容器实现
+  - org.springframework.context.support.FileSystemXmlApplicationContext。在默认 情况下，从文件系统加载bean定义以及相关资源的ApplicationContext实现
+  - org.springframework.context.support.ClassPathXmlApplicationContext。在默认情 况下，从Classpath加载bean定义以及相关资源的ApplicationContext实现
+  - org.springframework.web.context.support.XmlWebApplicationContext。Spring提供 的用于Web应用程序的ApplicationContext实现
+
+- Spring中的Resource
+  - ByteArrayResource。将字节（byte）数组提供的数据作为一种资源进行封装，如果通过 InputStream形式访问该类型的资源，该实现会根据字节数组的数据，构造相应的ByteArrayInputStream并返回
+  - ClassPathResource。该实现从Java应用程序的ClassPath中加载具体资源并进行封装，可以使 用指定的类加载器（ClassLoader）或者给定的类进行资源加载
+  - FileSystemResource。对java.io.File类型的封装，所以，我们可以以文件或者URL的形 式对该类型资源进行访问，只要能跟File打的交道，基本上跟FileSystemResource也可以。
+  - UrlResource。通过java.net.URL进行的具体资源查找定位的实现类，内部委派URL进行具 体的资源操作
+  - InputStreamResource。将给定的InputStream视为一种资源的Resource实现类，较为少用。 可能的情况下，以ByteArrayResource以及其他形式资源实现代之
+
+- 可用的ResourceLoader 
+  - ResourceLoader有一个默认的实现类，即org.springframework.core.io.DefaultResourceLoader，该类默认的资源查找处理逻辑如下
+    - 首先检查资源路径是否以classpath:前缀打头，如果是，则尝试构造ClassPathResource类 型资源并返回
+    - 否则
+      - 尝试通过URL，根据资源路径来定位资源，如果没有抛出MalformedURLException， 有则会构造UrlResource类型的资源并返回
+      - 如果还是无法根据资源路径定位指定的资源，则委派 getResourceByPath(String) 方法来定位
+      - DefaultResourceLoader 的 getResourceByPath(String)方法默认实现逻辑是，构造ClassPathResource类型的资源并返回
+  - FileSystemResourceLoader
+    - 继承自DefaultResourceLoader，但覆写了getResourceByPath(String)方法，使之从文件系统加载资源并以 FileSystemResource类型返回
+  - ResourcePatternResolver ——批量查找的ResourceLoader
+    - ResourceLoader每次只能根据资源路径 返回确定的单个Resource实例，而ResourcePatternResolver则可以根据指定的资源路径匹配模式， 每次返回多个Resource实例
+
+- ApplicationContext与ResourceLoader
+  - ApplicationContext继承了ResourcePatternResolver，当 然就间接实现了ResourceLoader接口。所以，任何的ApplicationContext实现都可以看作是一个 ResourceLoader甚至ResourcePatternResolver。而这就是ApplicationContext支持Spring内统一 资源加载策略的真相
+  -  扮演ResourceLoader的角色
+  - ResourceLoader类型的注入
+
+- 国际化支持
+
+  - Locale
+
+    - 不同的 Locale代表不同的国家和地区，每个国家和地区在Locale这里都有相应的简写代码表示， 包括语言代码以及国家代码，这些代码是ISO标准代码
+
+  - ResourceBundle
+
+    - ResourceBundle用来保存特定于某个Locale的信息（可以是String类型信息，也可以是任何类型 的对象）。通常，ResourceBundle管理一组信息序列，所有的信息序列有统一的一个basename，然后 特定的Locale的信息，可以根据basename后追加的语言或者地区代码来区分,文件名中的messages部分称作ResourceBundle将加载的资源的basename，其他语言或地 区的资源在basename的基础上追加Locale特定代码
+
+      ```properties
+      messages.properties 
+      messages_zh.properties 
+      messages_zh_CN.properties 
+      messages_en.properties 
+      messages_en_US.properties
+      # messages_zh_CN.properties文件中
+      menu.file=文件({0}) 
+      menu.edit=编辑
+      ... 
+      # messages_en_US.properties文件中
+      menu.file=File({0}) 
+      menu.edit=Edit
+      ```
+
+  - MessageSource与ApplicationContext
+
+    - ApplicationContext需要其配置文件中有一个名称为messageSource的MessageSource实现
+    - org.springframework.context.support.StaticMessageSource。MessageSource接口的简单实现，可以通过编程的方式添加信息条目，多用于测试，不应该用于正式的生产环境
+    - org.springframework.context.support.ResourceBundleMessageSource。基于标准的 java.util.ResourceBundle而实现的MessageSource，对其父类AbstractMessageSource 的行为进行了扩展，提供对多个ResourceBundle的缓存以提高查询速度。同时，对于参数化 的信息和非参数化信息的处理进行了优化，并对用于参数化信息格式化的MessageFormat实例也进行了缓存。它是最常用的、用于正式生产环境下的MessageSource实现
+    -  org.springframework.context.support.ReloadableResourceBundleMessageSource 。 同样基于标准的java.util.ResourceBundle而构建的MessageSource实现类，但通过其 cacheSeconds属性可以指定时间段，以定期刷新并检查底层的properties资源文件是否有变更。 对于properties资源文件的加载方式也与ResourceBundleMessageSource有所不同，可以通过 ResourceLoader来加载信息资源文件。使用ReloadableResourceBundleMessageSource时， 应该避免将信息资源文件放到classpath中，因为这无助于ReloadableResourceBundleMessageSource定期加载文件变更
+
+- 事件发布
+
+  - Java SE提供了实现自定义事件发布（Custom Event publication）功能的基础类，即java.util.EventObject类和java.util.EventListener接口。所有的自定义事件类型可以通过扩展EventObject 来实现，而事件的监听器则扩展自EventListener
+  - Spring 的容器内事件发布类结构
+    - ApplicationEvent ,Spring容器内自定义事件类型，继承自java.util.EventObject
+      - ContextClosedEvent：ApplicationContext容器在即将关闭的时候发布的事件类型
+      - ContextRefreshedEvent：ApplicationContext容器在初始化或者刷新的时候发布的事件类 型。
+      - RequestHandledEvent：Web请求处理后发布的事件，其有一子类ServletRequestHandledEvent提供特定于Java EE的Servlet相关事件
+
+    - ApplicationListener,ApplicationContext容器内使用的自定义事件监听器接口定义，继承自java.util.EventListener。
+    - ApplicationContext,ApplicationContext容器现在担当的就是 事件发布者的角色
+
+- 多模块配置
+
+  - 以String[]形式传入这些配置文件所在的路径
+  - 使用通配符
+  - MessengerService类在Classpath中的位置定位配 置文件，而不用指定每个配置文件的完整路径名
+
+
+### 8.2.7 Spring依赖注入
+
+- @Autowired
+  - 构造方法定义（Constructor）。标注于类的构造方法之上的@Autowired，相当于抢夺了原有自 动绑定功能中“constructor”方式的权利，它将根据构造方法参数类型，来决定将什么样的依赖对象 注入给当前对象
+  - 域（Filed）或者说属性（Property）。不管它们声明的访问限制符是private、protected还是 public，只要标注了@Autowired，它们所需要的依赖注入需求就都能够被满足
+  - 方法定义（Method）。@Autowired不仅可以标注于传统的setter方法之上，而且还可以标注于任 意名称的方法定义之上，只要该方法定义了需要被注入的参数
+  - org.springframework.beans.  factory.annotation.AutowiredAnnotationBeanPostProcessor用于激活Autowired
+- @Qualifier
+  - @Autowired是按照类型进行匹配，如果当前@Autowired标注的依赖在容器中只能找到一个实例 与之对应的话，那还好。可是，要是能够同时找到两个或者多个同一类型的对象实例，就无法使用
+  - @Qualifier实际上是byName自动绑定的注解版，既然IoC容器无法自己从多个同一类型的实例中 选取我们真正想要的那个，那么我们不妨就使用@Qualifier直接点名要哪个好了
+
+- 使用JSR250 标注依赖注入关系
+  - 用JSR250的@Resource和@PostConstruct以及@PreDestroy
+  - @Resource
+    - @Resource与@Autowired不同，它遵循的是byName自动绑定形式的行为准则，也就是说，IoC容 器将根据@Resource所指定的名称，到容器中查找beanName与之对应的实例，然后将查找到的对象实 例注入给@Resource所标注的对象
+    - 与@Autowired能够存在的地方大致相同
+
+  - @PostConstruct和@PreDestroy不是服务于依赖注入的，它们主要用于标注对象生 命周期管理相关方法
+    - 与Spring的InitializingBean和DisposableBean接口，以及配置项中的 init-method和destroy-method起到类似的作用
+
+  - 如果想某个方法在对象实例化之后被调用，以做某些准备工作，或者想在对象销毁之前调用某个 方法清理某些资源，使用@PostConstruct和@PreDestroy来标注这些方法
+  - JSR250的这些注解也同样需要一个BeanPostProcessor帮助它们实现自身的价值。这个BeanPostProcessor就是org.springframework.context.  annotation.CommonAnnotationBeanPostProcessor，只有将CommonAnnotationBeanPostProcessor添 加到容器，JSR250的相关注解才能发挥作用
+
+- 在基于XSD的配置文件中使用一个context:annotation-config配置
+  - 把 AutowiredAnnotationBeanPostProcessor 和 CommonAnnotationBeanPostProcessor注册到容器，同时还会把PersistenceAnnotationBeanPostProcessor和RequiredAnnotationBeanPostProcessor一并进行注册
+  - PersistenceAnnotationBeanPostProcessor
+    - 这个处理器主要用于处理与 JPA（Java Persistence API）相关的注解，如 @Entity, @Repository, @EntityListener 等
+
+  - RequiredAnnotationBeanPostProcessor
+    - 这个处理器用于处理 @Required 注解。当一个 bean 的属性或构造函数参数上标记了 @Required，并且该属性或参数在注入时没有提供值，那么 Spring 会抛出一个异常
+
+- classpath-scanning
+  - classpath-scanning功能可以从某一顶层 包（base package）开始扫描。当扫描到某个类标注了相应的注解之后，就会提取该类的相关信息，构 建对应的BeanDefinition，然后把构建完的BeanDefinition注册到容器
+  - classpath-scanning功能的触发是由在基于XSD的配置文件中使用一个context:component-scan决定的
+  - context:component-scan默认扫描的注解类型是@Component。不过，在@Component语义基 础上细化后的@Repository、@Service和@Controller也同样可以
+  - 在扫描相关类定义并将它们添加到容器的时候，会使用一种默认的 命名规则，来生成那些添加到容器的bean定义的名称（beanName）。比如DowJonesNewsPersister通 过默认命名规则将获得dowJonesNewsPersister作为bean定义名称
+  - context:component-scan同时将AutowiredAnnotationBeanPostProcessor和 CommonAnnotationBeanPostProcessor一并注册到了容器中
+
+
+## 8.3 Spring核心-AOP
+
+### 8.3.1 AOP 基本概念
+
+- Joinpoint
+  - 我们可以在HelloBean初始化的执行点进行横切逻辑的织入,可以以在hellomethod方法被调用的执行点上进行横切逻辑的织入,可以在hellomethod方法内部执行行的开始时点上进行织入,也可以在message字段被设置或者取得的执行点上进行横切逻辑的织入。基本上,只要允许,程序执行过程中的任何时点都可以作为横切逻辑的织入点,而所有这些执行时点都是Joinpoint。
+  - 方法调用(Method Call)
+    - 当某个方法被调用的时候所处的程序执行点
+  - 方法调用执行(Method Call execution)
+    - 称之为方法执行或许更简洁,该Joinpoint类型代表的是某个方法内部执行开始时点,应该与方法调用类型的Joinpoint进行区分。
+    - 方法调用(method call)是在调用对象上的执行点,而方法执行(methodexecution)则是在被调用到的方法逻辑执行的时点。对于同一对象,方法调用要先于方法执行。
+  - 构造方法调用(Constructor Call)
+    - 程序执行过程中对象调用其构造方法进行初始化的时点
+  - 构造方法执行(ConstructorCall Execution)
+    - 构造方法执行和村沟造方法调用之间的关系类似于方法执行和方法调用之间的关系,指的是某个对象构造方法内部执行的开始时点。
+  - 字段设置(FieldSet)
+    - 对象的某个属性通过setter方法被设置或者直接被设置的时点。该Joinpoint的本质是对象的属性被设置,而通过setter方法设置还是直接设置触发的时点是相同的。
+  - 字段获取(FieldGet)
+    - 相对于字段设置型的Joinpoint,字段获取型的Joinpoint,对应的是某个对象相应属性被访问的时点。可以通过getter方法访问,当然也可以直接访问
+  - 异常处理执行(Exception HandlerExecution)
+    - 该类型的Joinpoin对应程序执行过程中,在某些类型异常抛出后,对应的异常处理逻辑执行的时点。
+  - 类初始化(Classinitialization)
+    - 类初始化型的Joinpoint,指的是类中某些静态类型或者静态块的初始化时点。
+- Pointcut
+  - Pointcut概念代表的是Joinpoint的表述方式。将横切逻辑织入当前系统的过程中,需要参照Pointcut规定的Joinpoint信息,才可以知道应该往系统的哪些Joinpoint上织入横切逻辑
+  - 直接指定Joinpoint所在方法名称
+    - 这种形式的Pointcut表述方式比较简单,而且功能单一,通常只限于支持方法级别Joinpoint的AOP框架,或者只是方法调用类型的Joinpoint,或者只是方法执行类型的Joinpoint。而且,即使是只针对方法级别的Joinpoint,因为系统中需要织入横切逻辑的方法可能很多,一个一个地指定则过于不便,所以这种方式通常只限于Joinpoint较少且较为简单的情况。
+  - 正则表达式
+    - 这是比较普遍的Pointcut表达方式,可以充分利用正则表达式的强大功能,来归纳表述需要符合某种条件的多组Joinpoint。儿乎现在大部分的Java平台的AOP产品都支持这种形式的Pointcut表达形式,包括JbossAOP、SpringAOP以及AspectWerkz等。
+  - 使用特定的Pointcut表述语言
+    - 这是一种最为强大的表达Poirtcut的方式,灵活性也很好,但具体实现起来可能过于复杂,需要设计该表述语言的语法,实现相应的解释器等许多工作。AspectJ使用这种方式来指定Pointcut,它提供了一种类似于正则表达式的针对Pointcut的表述语言,在表达Pointcut方面支持比较完善。
+  - Pointcut与Pointcut之间还可以进行逻辑运算,具体使用的逻辑运算语法,会因AOP产品实现的不同而不同。比如在Spring的配置文件中使用and、or等单词作为逻辑运算符,而在AspectJ中,则可以使用&&以及II。
+- Advice
+  - Advice是单一横切关注点逻辑的载体,它代表将会织入到Joinpoint的横切逻辑。如果将Aspect比作OOP中的Class,那么Advice就相当于Class中的Method。按照Advice在Joinpoint位置执行时机的差异或者完成功能的不同,Advice可以分成多种具体形式。
+  - Before Advice
+    - Before Advice是在Joint指定位置之前执行的Advice类型。通常,它不会中断程序执行流程,但如果必要,可以通过在BeforeAdvice中抛出异常的方式来中断当前程序流程。如果当前Before Advice将被织入到方法执行类型的Joinpoint,那么这个Before Advice就会先于方法去执行而执行
+      通常,可以使用Before Advice做一些系统的初始化工作,比如设置系统初始值,获取必要系统资源等。当然,并非就限于这些情况。如果要用BeforeAdvice来封装安全检查的逻辑,也不是不可以的,但通常情况下,我们会使用另一种形式的Advice。
+  - After Advice
+    - After Advice就是在相应连接点之后执行的Advice类型
+    - After returning Advice
+      - 只有当前Joint处执行流程正常完成后,After returning Advice才会执行。比如方法执行正常返回而没有抛出异常。
+    - After throwing Advice
+      - 又称Throws Advice,只有在当前Joint执行过程中抛出异常的情况下,才会执行。比如某个方法执行类型的Joinpoint抛出某异常而没有有正常返回
+    - After Advice
+      - 或许叫After(Finally)Advice更为确切,该类型Advice不管Joinpoint处执行流程是正常终了还是抛出异常都会执行,就好像Java中的finally块一样
+  - Around Advice
+    - Around Advice可以在Joinpoint之前和之后都能执行相应的逻辑,那么,它自然可以完成BeforeAdvice和AfterAdvice的功能。不过,通常情况下,还是应该根据场景选用更为具体的Advice类型。
+  - Introduction
+    - 在AspectJ中称Inter-Type Declaration,在JBossAOP中称Mix-in,都指的是这同一种类型的Advice。与之前的几种Advice类型不同,Introduction不是根据横切逻辑在Joinpoin处的执行时机来区分的,而是根据它可以完成的功能而区别于其他Advice类型。
+    - Introduction可以为原有的对象添加新的特性或者行为,这就就好像你是一个普通公民,当让你穿军装,带军帽,添加了军人类型的Introduction之后,你就拥有军人的特性或者行为。
+- Aspect
+  - Aspect是对系统中的横切关注点逻辑进行模块化封装的AOP概念实体。通常情况下,Aspect可以包含多个Pointcut以及相关Advice定义。
+
+### 8.3.2 Spring AOP 一世
+
+- SpringAOP属于第二代AOP,采用动态代理机制和字节码生成技术实现。与最初的AspectJ采用编译器将横切逻辑织入目标对象不同,动态代理机制和字节码生成都是在运行期间为目标对象生成一个代理对象,而将横切逻辑织入到这个代理对象中,系统最终使用的是织入了横切逻辑的代理对象,而不是真正的目标对象。
+- JDK动态代理
+- CGLIB动态字节码
+- Joinpoint
+  - 在SpringAOP中,仅支持方法级别的Joinpoint。更确切地说,只支持方法执行(Method Execution)类型的Joinpoint。
+- Pointcut
+
+  - SpringAOP的Pointcut类型可以划分为StaticMethodMatcher Pointcut和DynamicMethodatcherPointcut两类
+
+  - NameMatchMethodPointcut
+    - 这是最简单的Pointcut实现,属于StaticMethodMatcherPointcut的子类,可以根据自身指定的一组方法名称与Joinpoint处的方法名称进行匹配
+    - 如果基于"*"通配符的NameMatchMethodPointcut依然无法满足对多个特定Joinpoint的匹配需要,那么使用正则表达式好了。
+  - JdkRegexpMethodPointcut和Perl5RegexpMethodPointcut
+    - StaticMethodMatcherPointcut的子类中有一个专门提供基于正则表达式的实现分支，JdkRegexpMethodPointcut和Per15RegexpMethodPointcut两种具体实现
+  - AnnotationMatchingPointcut
+    - AnnotationMatchingPointcut根据目标对象中是否存在指定类型的注解来匹配Joinpoint,要使用该类型的Pointcut,首先需要声明相应的注解。
+    - @ClassLevelAnnotation用于类层次,而@MethodLevelAnnotation只能用于方法层次
+  - ComposablePointcut
+    - Pointcut通常道不提供逻辑运算功能,而ComposablePointcut就是SpringAOP提供的可以进行Pointcut逻辑运算的Pointcut实现。它可以进行Pointcut之间的"并"以及"交"运算
+  - ControlFlowPointcut
+    - 当织入器按照Pointcut的规定,将Advice织入到目标对象之后,从任何其他地方调用method1,是不会触发Advice所包含的横切逻辑的执行的。只有在ControlFlowPointcut规定的类内部调用目标对象的method1,才会触发Advice中横切逻辑的执行。
+- Advice
+  - Advice实现了将被织入到Pointcut规定的Joinpoint处的横切逻辑。在Spring中,Advice按照其自身实例(instance)能否在目标对象类的所有实例中共享这一标准,可以以划分为两大类,即per-class类型的Advice和per-instance类型的Advice。
+  - per-class 类型的Advice
+    - per-class类型的Advice是指,该类型的Advice的实例可以在目标对多象类的所有实例之间共享。这种类型的Advice通常只是提供方法拦截的功能,不会为目标对象类保存任何状态或者添加新的特性。
+    - Before Advice
+      - Before Advice所实现的横切逻辑将在相应的Joinpoint之前执行,在BBefore Advice执行完成之后,程序执行流程将从Joinpoint处继续执行,所以BeforeAdvice通常不会打断程序的执行流程。
+
+    - ThrowsAdvice
+    - AfterReturningAdvice
+      - 通过Spring中的AfterReturningAdvice,我们可以访问当前Joinpoint的方法返回值、方法、方法、方法参数以及所在的目标对象。
+
+    - Around Advice
+- Aspect
+  - Advisor代表Spring中的Aspect,但是,与正常的Aspect不同,Advisor通常只持有一个Pointcut和一个Advice。而理论上,Aspect定义中可以有多个Pointcut和多个Advice,所以,我们可以认为Advisor是一种特殊的Aspect。
+  - 为了能够更清楚Advisor的实现结构体系,我们可以将Adviso简单划分为两个分支,一个分支以org.springframework.aop.PointcutAdvisor为首,另一个分子支则以org.springframework.aop.IntroductionAdvisor为头儿
+
+- ProxyFactory
+  - 
 
 
 
